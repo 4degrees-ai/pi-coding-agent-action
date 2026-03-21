@@ -1,0 +1,18 @@
+pre-commit:
+  parallel: false
+  commands:
+    format:
+      run: bun run format
+      stage_fixed: true
+    lint:
+      run: bun run lint
+    type-check:
+      run: bun run type-check
+    build:
+      run: bun run package && git add dist/
+      stage_fixed: true
+
+pre-push:
+  commands:
+    validate:
+      run: bun run validate
