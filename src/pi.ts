@@ -55,7 +55,7 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
   }
 
   const result = spawnSync('pi', args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['pipe', 'inherit', 'inherit'], // Inherit stdout and stderr
     encoding: 'utf8',
     timeout: PI_TIMEOUT_MS,
     env,
