@@ -9,9 +9,13 @@ const GITHUB_TOKEN = core.getInput('github_token');
 // ── GitHub API Client (Octokit) ───────────────────────────────
 /**
  * Gets the Octokit client for GitHub API operations.
+ * Cached to avoid creating multiple instances.
  */
+let octokitInstance: ReturnType<typeof github.getOctokit> | undefined;
+
 function getOctokit() {
-  return github.getOctokit(GITHUB_TOKEN);
+  octokitInstance ??= github.getOctokit(GITHUB_TOKEN);
+  return octokitInstance;
 }
 
 // ── GitHub CLI Wrapper ───────────────────────────────────────
