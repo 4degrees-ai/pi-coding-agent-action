@@ -16,13 +16,15 @@ permissions:
 jobs:
   pi-agent:
     if: |
-      (github.actor == 'shaftoe') &&
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/pi'))
+      (github.actor == 'shaftoe') && contains(github.event.comment.body, '/pi')
+
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || '' }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v6
