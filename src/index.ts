@@ -45,6 +45,7 @@ function extractContext(payload: GitHubPayload) {
 
 /**
  * Handles the workflow for PR-related comments.
+ * Assumes the PR branch is already checked out by the workflow.
  * @param gitService - The GitService instance
  * @param issueNumber - The PR number
  * @param userPrompt - The user's prompt
@@ -59,41 +60,19 @@ async function handlePRWorkflow(
   commentId: number
 ): Promise<void> {
   const pr = getPRData(issueNumber);
-  const { remote, branchName, headRefName, isLocalPR } = await gitService.checkoutPRBranch(
-    pr,
-    issueNumber
-  );
-
   const fullPrompt = buildPRPrompt(pr, userPrompt, commentId);
   const response = runPi(fullPrompt);
 
   if (gitService.branchIsDirty()) {
     const summary = summarize(response, issueNumber);
-
-    if (isLocalPR) {
-      // Local PR: push back to the same branch on the origin
-      await gitService.commitAndPush(
-        summary,
-        {
-          name: ACTOR,
-          email: `${ACTOR}@users.noreply.github.com`,
-        },
-        remote,
-        headRefName
-      );
-    } else {
-      // Fork PR: push the modified branch to origin with a descriptive name
-      // This allows contributors to create a new PR with the fixes
-      await gitService.commitAndPush(
-        summary,
-        {
-          name: ACTOR,
-          email: `${ACTOR}@users.noreply.github.com`,
-        },
-        'origin',
-        branchName
-      );
-    }
+    await gitService.commitAndPush(
+      summary,
+      {
+        name: ACTOR,
+        email: `${ACTOR}@users.noreply.github.com`,
+      },
+      pr.headRefName
+    );
   }
 
   const finalBody = `${response}\n\n[View run](${runUrl})`;
@@ -103,6 +82,7 @@ async function handlePRWorkflow(
 /**
  * Handles the workflow for issue-related comments.
  * Creates a new branch, runs pi, and optionally creates a PR.
+ * Assumes the default branch is already checked out.
  * @param gitService - The GitService instance
  * @param issueNumber - The issue number
  * @param userPrompt - The user's prompt
@@ -116,9 +96,9 @@ async function handleIssueWorkflow(
   runUrl: string,
   commentId: number
 ): Promise<void> {
-  const defaultBranch = gitService.getCurrentBranch() ?? 'main';
+  const defaultBranch = github.context.payload.repository?.default_branch ?? 'main';
   const branch = generateBranchName('issue', issueNumber);
-  gitService.checkoutBranch(branch, true);
+  gitService.checkoutBranch(branch);
 
   const issue = getIssueData(issueNumber);
   const fullPrompt = buildIssuePrompt(issue, userPrompt, commentId);
@@ -132,7 +112,6 @@ async function handleIssueWorkflow(
         name: ACTOR,
         email: `${ACTOR}@users.noreply.github.com`,
       },
-      'origin',
       branch
     );
 

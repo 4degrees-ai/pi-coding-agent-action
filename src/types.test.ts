@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import type { IssueComment, IssueNode, PRNode, GitAuthor, BranchCheckoutOptions } from './types.js';
+import type { IssueComment, IssueNode, PRNode, GitAuthor } from './types.js';
 
 describe('types', () => {
   describe('IssueComment', () => {
@@ -448,54 +448,6 @@ describe('types', () => {
       };
 
       expect(author.email).toMatch(/^[^@]+@[^@]+\.[^@]+$/);
-    });
-  });
-
-  describe('BranchCheckoutOptions', () => {
-    it('should have required properties', () => {
-      const options: BranchCheckoutOptions = {
-        remote: 'origin',
-        branch: 'main',
-      };
-
-      expect(options).toHaveProperty('remote');
-      expect(options).toHaveProperty('branch');
-      expect(options.remote).toBe('origin');
-      expect(options.branch).toBe('main');
-    });
-
-    it('should accept optional depth property', () => {
-      const options: BranchCheckoutOptions = {
-        remote: 'origin',
-        branch: 'feature',
-        depth: 10,
-      };
-
-      expect(options.depth).toBe(10);
-    });
-
-    it('should accept optional createNew property', () => {
-      const options: BranchCheckoutOptions = {
-        remote: 'origin',
-        branch: 'new-feature',
-        createNew: true,
-      };
-
-      expect(options.createNew).toBeTrue();
-    });
-
-    it('should accept all optional properties', () => {
-      const options: BranchCheckoutOptions = {
-        remote: 'fork',
-        branch: 'feature-branch',
-        depth: 20,
-        createNew: true,
-      };
-
-      expect(options.remote).toBe('fork');
-      expect(options.branch).toBe('feature-branch');
-      expect(options.depth).toBe(20);
-      expect(options.createNew).toBeTrue();
     });
   });
 

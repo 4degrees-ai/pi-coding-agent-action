@@ -25,21 +25,6 @@ describe('GitService', () => {
     });
   });
 
-  describe('getCurrentBranch', () => {
-    it('should return branch name', () => {
-      // This would require mocking runCommand from utils
-      // For now we test the function exists and returns correct type
-      const branch = gitService.getCurrentBranch();
-      expect(branch === null || typeof branch === 'string').toBeTrue();
-    });
-
-    it('should return null when not on a branch', () => {
-      // This would need mocking to test detached HEAD state
-      const branch = gitService.getCurrentBranch();
-      expect(branch === null || typeof branch === 'string').toBeTrue();
-    });
-  });
-
   describe('branchIsDirty', () => {
     it('should return false for clean working directory', () => {
       const isDirty = gitService.branchIsDirty();

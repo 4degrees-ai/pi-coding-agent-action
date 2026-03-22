@@ -55,10 +55,3 @@ export interface GitAuthor {
   name: string;
   email: string;
 }
-
-export interface BranchCheckoutOptions {
-  remote: string;
-  branch: string;
-  depth?: number;
-  createNew?: boolean;
-}
