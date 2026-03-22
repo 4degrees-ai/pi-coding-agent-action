@@ -168,33 +168,26 @@ async function handleError(err: unknown): Promise<void> {
  * Handles both issue and PR workflows.
  */
 async function run(): Promise<void> {
-  try {
-    const payload = github.context.payload;
-    const { issueNumber, userPrompt, runUrl, commentId } = extractContext(payload);
+  const payload = github.context.payload;
+  const { issueNumber, userPrompt, runUrl, commentId } = extractContext(payload);
 
-    // Add "eyes" reaction to indicate work has started
-    await addReaction(commentId, 'eyes');
+  // Add "eyes" reaction to indicate work has started
+  await addReaction(commentId, 'eyes');
 
-    const gitService = setupGitService();
+  const gitService = setupGitService();
 
-    const isPR = Boolean(payload.issue?.pull_request);
+  const isPR = Boolean(payload.issue?.pull_request);
 
-    if (isPR) {
-      await handlePRWorkflow(gitService, issueNumber, userPrompt, runUrl, commentId);
-    } else {
-      await handleIssueWorkflow(gitService, issueNumber, userPrompt, runUrl, commentId);
-    }
-  } catch (err) {
-    await handleError(err);
+  if (isPR) {
+    await handlePRWorkflow(gitService, issueNumber, userPrompt, runUrl, commentId);
+  } else {
+    await handleIssueWorkflow(gitService, issueNumber, userPrompt, runUrl, commentId);
   }
 }
 
 // Only run if this is the main module (not during imports)
 if (require.main === module) {
-  run().catch(err => {
-    core.setFailed(err instanceof Error ? err.message : String(err));
-    process.exit(1);
-  });
+  run().catch(handleError);
 }
 
 export { run };
