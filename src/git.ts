@@ -248,7 +248,7 @@ export class GitService {
 
   // ── Push Operations ───────────────────────────────────────
   /**
-   * Pushes a branch to a remote.
+   * Pushes a branch to a remote and sets up tracking.
    * @param remote - The remote name
    * @param branch - The branch name
    * @param force - Whether to force push (default: false)
@@ -261,7 +261,7 @@ export class GitService {
       http,
       dir: this.dir,
       remote,
-      ref: branch,
+      ref: `refs/heads/${branch}:refs/heads/${branch}`,
       force,
       onAuth: this.createOnAuth(),
     });
