@@ -19,7 +19,7 @@ export function runCommand(
   core.info(`Running: ${cmd.join(' ')}`);
 
   const result = spawnSync(cmd[0], cmd.slice(1), {
-    stdio: ['pipe', 'pipe', options?.stdio || 'pipe'],
+    stdio: ['pipe', 'pipe', options?.stdio ?? 'pipe'],
     encoding: 'utf8',
     input: options?.input,
     timeout: options?.timeout,
