@@ -1,12 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
-import * as core from '@actions/core';
-import {
-  runCommand,
-  getMentions,
-  assertKeyword,
-  extractUserPrompt,
-  parseEnvVars,
-} from './utils.js';
+import { describe, it, expect } from 'bun:test';
+import { runCommand, extractUserPrompt, parseEnvVars } from './utils.js';
 
 describe('utils', () => {
   describe('runCommand', () => {
@@ -55,110 +48,7 @@ describe('utils', () => {
     });
   });
 
-  describe('getMentions', () => {
-    let getInputSpy: ReturnType<typeof spyOn>;
-
-    beforeEach(() => {
-      getInputSpy = spyOn(core, 'getInput');
-    });
-
-    afterEach(() => {
-      getInputSpy.mockRestore();
-    });
-
-    it('should return default mention when no input is provided', () => {
-      getInputSpy.mockReturnValue('');
-      expect(getMentions()).toEqual(['/pi']);
-    });
-
-    it('should parse comma-separated mentions', () => {
-      getInputSpy.mockReturnValue('/pi,@bot,/ai');
-      expect(getMentions()).toEqual(['/pi', '@bot', '/ai']);
-    });
-
-    it('should trim whitespace from mentions', () => {
-      getInputSpy.mockReturnValue(' /pi , @bot , /ai ');
-      expect(getMentions()).toEqual(['/pi', '@bot', '/ai']);
-    });
-
-    it('should convert mentions to lowercase', () => {
-      getInputSpy.mockReturnValue('/Pi,@Bot,/AI');
-      expect(getMentions()).toEqual(['/pi', '@bot', '/ai']);
-    });
-
-    it('should handle single mention', () => {
-      getInputSpy.mockReturnValue('/custom');
-      expect(getMentions()).toEqual(['/custom']);
-    });
-  });
-
-  describe('assertKeyword', () => {
-    let getInputSpy: ReturnType<typeof spyOn>;
-    let setFailedSpy: ReturnType<typeof spyOn>;
-
-    beforeEach(() => {
-      getInputSpy = spyOn(core, 'getInput').mockReturnValue('/pi');
-      setFailedSpy = spyOn(core, 'setFailed').mockImplementation(() => {
-        // Intentionally empty - we just want to track calls
-      });
-    });
-
-    afterEach(() => {
-      getInputSpy.mockRestore();
-      setFailedSpy.mockRestore();
-    });
-
-    it('should not throw when comment contains mention', () => {
-      expect(() => assertKeyword('/pi fix this bug')).not.toThrow();
-    });
-
-    it('should not throw when comment starts with mention', () => {
-      expect(() => assertKeyword('/pi fix this bug')).not.toThrow();
-    });
-
-    it('should not throw when mention is in middle', () => {
-      expect(() => assertKeyword('Can you /pi help me?')).not.toThrow();
-    });
-
-    it('should not throw when mention is at end', () => {
-      expect(() => assertKeyword('Help me please /pi')).not.toThrow();
-    });
-
-    it('should throw when comment does not contain mention', () => {
-      expect(() => assertKeyword('fix this bug')).toThrow();
-    });
-
-    it('should call setFailed when mention not found', () => {
-      try {
-        assertKeyword('fix this bug');
-        throw new Error('Should have thrown');
-      } catch {
-        expect(setFailedSpy).toHaveBeenCalled();
-      }
-    });
-
-    it('should handle multiple mentions', () => {
-      getInputSpy.mockReturnValue('/pi,@bot');
-      expect(() => assertKeyword('/pi help me')).not.toThrow();
-      expect(() => assertKeyword('@bot help me')).not.toThrow();
-    });
-
-    it('should be case insensitive for mention', () => {
-      expect(() => assertKeyword('/PI fix this')).not.toThrow();
-    });
-  });
-
   describe('extractUserPrompt', () => {
-    let getInputSpy: ReturnType<typeof spyOn>;
-
-    beforeEach(() => {
-      getInputSpy = spyOn(core, 'getInput').mockReturnValue('/pi');
-    });
-
-    afterEach(() => {
-      getInputSpy.mockRestore();
-    });
-
     it('should extract prompt after mention', () => {
       const prompt = extractUserPrompt('/pi fix this bug');
       expect(prompt).toBe('fix this bug');
@@ -179,18 +69,14 @@ describe('utils', () => {
       expect(prompt).toBe('help me?');
     });
 
-    it('should handle multiple mentions', () => {
-      getInputSpy.mockReturnValue('/pi,@bot');
-      const prompt1 = extractUserPrompt('/pi help');
-      expect(prompt1).toBe('help');
-
-      const prompt2 = extractUserPrompt('@bot help');
-      expect(prompt2).toBe('help');
+    it('should return full text if no mention found', () => {
+      const prompt = extractUserPrompt('just a comment');
+      expect(prompt).toBe('just a comment');
     });
 
-    it('should return null if no mention found', () => {
-      const prompt = extractUserPrompt('just a comment');
-      expect(prompt).toBeNull();
+    it('should trim whitespace from text without mention', () => {
+      const prompt = extractUserPrompt('  just a comment  ');
+      expect(prompt).toBe('just a comment');
     });
   });
 

@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { assertKeyword, extractUserPrompt, generateBranchName } from './utils.js';
+import { extractUserPrompt, generateBranchName } from './utils.js';
 import { gh } from './gh.js';
 import { GitService } from './git.js';
 import { buildIssuePrompt, buildPRPrompt } from './prompts.js';
@@ -52,7 +52,6 @@ function extractContext(payload: GitHubPayload) {
   const commentBody = payload.comment?.body ?? '';
   const commentId = payload.comment?.id ?? undefined;
 
-  assertKeyword(commentBody);
   const userPrompt = extractUserPrompt(commentBody) ?? '';
   const runUrl = buildRunUrl();
 

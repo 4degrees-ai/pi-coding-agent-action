@@ -1,4 +1,3 @@
-import * as core from '@actions/core';
 import { spawnSync } from 'child_process';
 import { Temporal } from '@js-temporal/polyfill';
 import { DEFAULT_MENTION, PI_BRANCH_PREFIX } from './constants.js';
@@ -38,45 +37,13 @@ export function runCommand(
 
 // ── Mention Helpers ───────────────────────────────────────────────
 /**
- * Gets the list of configured mentions from action inputs.
- * @returns Array of mention strings (e.g., ['/pi', '@bot'])
- */
-export function getMentions(): string[] {
-  const raw = core.getInput('mentions');
-  const value = raw || DEFAULT_MENTION;
-  return value.split(',').map(m => m.trim().toLowerCase());
-}
-
-/**
- * Asserts that the comment body contains one of the required mentions.
+ * Extracts the user prompt from a comment body by optionally removing the mention prefix.
  * @param body - The comment body text
- * @throws Error if no matching mention is found
- */
-export function assertKeyword(body: string): void {
-  const lower = body.toLowerCase().trim();
-  const mentions = getMentions();
-  const matched = mentions.some(
-    m =>
-      lower === m ||
-      lower.startsWith(m + ' ') ||
-      lower.includes(' ' + m + ' ') ||
-      lower.endsWith(' ' + m)
-  );
-  if (!matched) {
-    const message = `Comment must contain one of: ${mentions.join(', ')}`;
-    core.setFailed(message);
-    throw new Error(message);
-  }
-}
-
-/**
- * Extracts the user prompt from a comment body by removing the mention prefix.
- * @param body - The comment body text
- * @returns The extracted prompt, or null if the comment only contains a mention
+ * @returns The extracted prompt, or the original body if no mention is found
  */
 export function extractUserPrompt(body: string): string | null {
   const lower = body.toLowerCase().trim();
-  const mentions = getMentions();
+  const mentions = [DEFAULT_MENTION];
   for (const mention of mentions) {
     const idx = lower.indexOf(mention);
     if (idx !== -1) {
@@ -84,7 +51,7 @@ export function extractUserPrompt(body: string): string | null {
       return rest || null;
     }
   }
-  return null;
+  return body.trim() || null;
 }
 
 /**
