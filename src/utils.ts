@@ -16,8 +16,6 @@ export function runCommand(
   options?: { input?: string; timeout?: number; stdio?: 'pipe' | 'inherit' },
   env?: NodeJS.ProcessEnv
 ): string {
-  core.info(`Running: ${cmd.join(' ')}`);
-
   const result = spawnSync(cmd[0], cmd.slice(1), {
     stdio: ['pipe', 'pipe', options?.stdio ?? 'pipe'],
     encoding: 'utf8',
