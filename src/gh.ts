@@ -8,6 +8,8 @@ import type { IssueNode, PRNode } from './types.js';
 /**
  * A client for interacting with GitHub features via both the GitHub CLI and Octokit API.
  * Provides methods for issue/PR data retrieval, comments, reactions, and PR creation.
+ *
+ * @internal This class is exported primarily for testing purposes. Use the singleton {@link gh} instance instead.
  */
 class GitHubClient {
   private readonly token: string;
@@ -31,6 +33,24 @@ class GitHubClient {
    */
   private getRepoContext() {
     return github.context.repo;
+  }
+
+  /**
+   * Parses JSON output from GitHub CLI commands with consistent error handling.
+   * @param output - The JSON string to parse
+   * @param dataType - The type of data being parsed (e.g., "issue", "PR")
+   * @param number - The issue/PR number for error context
+   * @returns The parsed JSON object
+   * @throws Error with context about the parsing failure
+   */
+  private parseJSONOutput<T>(output: string, dataType: string, number: number): T {
+    try {
+      return JSON.parse(output) as T;
+    } catch (e) {
+      throw new Error(
+        `Failed to parse ${dataType} data for #${number}: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
   }
 
   /**
@@ -70,13 +90,7 @@ class GitHubClient {
       '--json',
       'title,body,state,author,createdAt,comments',
     ]);
-    try {
-      return JSON.parse(output);
-    } catch (e) {
-      throw new Error(
-        `Failed to parse issue data for #${issueNumber}: ${e instanceof Error ? e.message : String(e)}`
-      );
-    }
+    return this.parseJSONOutput<IssueNode>(output, 'issue', issueNumber);
   }
 
   /**
@@ -93,13 +107,7 @@ class GitHubClient {
       '--json',
       'title,body,state,author,baseRefName,headRefName,headRepository,baseRepository,additions,deletions,commits,files,reviews,comments',
     ]);
-    try {
-      return JSON.parse(output);
-    } catch (e) {
-      throw new Error(
-        `Failed to parse PR data for #${prNumber}: ${e instanceof Error ? e.message : String(e)}`
-      );
-    }
+    return this.parseJSONOutput<PRNode>(output, 'PR', prNumber);
   }
 
   /**

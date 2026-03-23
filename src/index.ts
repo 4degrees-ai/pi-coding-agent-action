@@ -12,9 +12,14 @@ interface IssueCommentPayload {
   body?: string;
 }
 
+interface PullRequestReference {
+  number: number;
+  html_url: string;
+}
+
 interface IssueWithPR {
   number: number;
-  pull_request?: unknown;
+  pull_request?: PullRequestReference;
 }
 
 interface GitHubPayload {
@@ -45,7 +50,7 @@ function extractContext(payload: GitHubPayload) {
 
   const issueNumber = payload.issue.number;
   const commentBody = payload.comment?.body ?? '';
-  const commentId = payload.comment?.id ?? 0;
+  const commentId = payload.comment?.id ?? undefined;
 
   assertKeyword(commentBody);
   const userPrompt = extractUserPrompt(commentBody) ?? '';
@@ -68,7 +73,7 @@ async function handlePRWorkflow(
   issueNumber: number,
   userPrompt: string,
   runUrl: string,
-  commentId: number
+  commentId: number | undefined
 ): Promise<void> {
   const pr = gh.getPRData(issueNumber);
 
@@ -109,7 +114,7 @@ async function handleIssueWorkflow(
   issueNumber: number,
   userPrompt: string,
   runUrl: string,
-  commentId: number
+  commentId: number | undefined
 ): Promise<void> {
   const defaultBranch = github.context.payload.repository?.default_branch ?? DEFAULT_GITHUB_BRANCH;
   const branch = generateBranchName('issue', issueNumber);
@@ -171,8 +176,10 @@ async function run(): Promise<void> {
   let reactionId: number | undefined;
 
   try {
-    // Add "eyes" reaction to indicate work has started
-    reactionId = await gh.addReaction(commentId, 'eyes');
+    // Add "eyes" reaction to indicate work has started (only if we have a valid comment ID)
+    if (commentId !== undefined) {
+      reactionId = await gh.addReaction(commentId, 'eyes');
+    }
 
     const gitService = new GitService(GITHUB_TOKEN);
 
@@ -185,7 +192,7 @@ async function run(): Promise<void> {
     }
   } finally {
     // Remove the "eyes" reaction before exit, even on error
-    if (reactionId !== undefined) {
+    if (reactionId !== undefined && commentId !== undefined) {
       await gh.removeReaction(commentId, reactionId).catch(err => {
         // Silently ignore errors when removing the reaction
         core.debug(

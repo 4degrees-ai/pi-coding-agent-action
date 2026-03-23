@@ -2,6 +2,7 @@ import * as core from '@actions/core';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as crypto from 'node:crypto';
 import { parseEnvVars, runCommand } from './utils.js';
 import {
   PI_TIMEOUT_MS,
@@ -20,7 +21,10 @@ function safeRemoveFile(filePath: string): void {
   try {
     fs.unlinkSync(filePath);
   } catch (e) {
-    core.debug(`Failed to clean up file ${filePath}: ${e}`);
+    // Log warnings for cleanup failures to aid in debugging
+    // Don't throw to avoid masking original errors in the try-finally block
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    core.warning(`Failed to clean up temp file ${filePath}: ${errorMsg}`);
   }
 }
 
@@ -62,7 +66,11 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
   let systemPromptFile = '';
   if (hasCustomSystemPrompt) {
     // Write SYSTEM.md to a temp file to avoid conflicts
-    systemPromptFile = path.join(os.tmpdir(), `${SYSTEM_PROMPT_TEMP_FILE_PREFIX}_${Date.now()}.md`);
+    // Use UUID for better uniqueness than Date.now()
+    systemPromptFile = path.join(
+      os.tmpdir(),
+      `${SYSTEM_PROMPT_TEMP_FILE_PREFIX}_${crypto.randomUUID()}.md`
+    );
     fs.writeFileSync(systemPromptFile, customSystemPrompt, 'utf8');
   }
 
@@ -98,6 +106,16 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
 // ── Constants ─────────────────────────────────────────────
 /**
  * Generic prefix patterns for commit message summarization.
+ *
+ * This regex matches common generic phrases that AI assistants often start
+ * responses with, which make poor commit message subjects.
+ *
+ * Patterns:
+ * - I, I'll: First-person statements (e.g., "I have fixed...")
+ * - Sure, OK, Great: Affirmative responses (e.g., "Sure, I'll do that...")
+ * - Here: Descriptive starts (e.g., "Here is the fix...")
+ * - The, This: Definite articles as sentence starts (e.g., "The bug was...")
+ * - A: Generic article (e.g., "A fix for...")
  */
 const GENERIC_PREFIX_PATTERN = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
 

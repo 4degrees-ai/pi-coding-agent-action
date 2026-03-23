@@ -23,6 +23,7 @@ const DEFAULT_COMMITTER: GitAuthor = {
 export class GitService {
   private readonly dir: string;
   private readonly token: string;
+  private httpClient: HttpClient | undefined;
 
   constructor(token: string, dir: string = process.cwd()) {
     this.token = token;
@@ -62,12 +63,22 @@ export class GitService {
    * enhancements and to validate repository context availability.
    */
   async configureCredentials(): Promise<void> {
+    // Check if GitHub context is available (may not be in test environments)
     try {
-      const { owner, repo } = github.context.repo;
-      core.debug(`Git context validated for ${owner}/${repo}`);
-    } catch {
-      // Context may not be available in test environments
-      core.debug('Git context validation skipped (no github context)');
+      const repo = github.context?.repo;
+      if (repo) {
+        const { owner, repo: repoName } = repo;
+        core.debug(`Git context validated for ${owner}/${repoName}`);
+      } else {
+        core.debug('Git context validation skipped (no github context)');
+      }
+    } catch (error) {
+      // Only silence errors related to missing context - rethrow others
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (!errorMsg.includes('context') && !errorMsg.includes('undefined')) {
+        throw error;
+      }
+      core.debug(`Git context validation skipped: ${errorMsg}`);
     }
     // Credentials are provided via onAuth callback during push operations
   }
@@ -159,7 +170,7 @@ export class GitService {
     // Push with embedded auth token
     await isoGit.push({
       fs,
-      http: await this.getHttpClient(),
+      http: this.createHttpAdapter(),
       dir: this.dir,
       url: authUrl,
       ref: `refs/heads/${branch}`,
@@ -182,9 +193,19 @@ export class GitService {
   /**
    * Gets the appropriate HTTP client for isomorphic-git.
    * Uses @actions/http-client for making HTTP requests.
+   * The client instance is cached to avoid creating multiple instances.
    */
-  private async getHttpClient() {
-    const httpClient = new HttpClient();
+  private getHttpClient() {
+    this.httpClient ??= new HttpClient();
+    return this.httpClient;
+  }
+
+  /**
+   * Creates the adapter function for isomorphic-git HTTP requests.
+   * Uses @actions/http-client for making HTTP requests.
+   */
+  private createHttpAdapter() {
+    const httpClient = this.getHttpClient();
 
     return {
       async request(options: {

@@ -4,6 +4,74 @@ import type { IssueNode, PRNode } from './types.js';
 const INSTRUCTIONS_MESSAGE =
   'IMPORTANT: Provide your response as a single, complete message. Do not include interim progress updates, status messages, or step-by-step commentary. Your response will be used directly as a comment and PR description.';
 
+// ── Helper Functions ───────────────────────────────────────
+/**
+ * Formats a field value with a fallback for empty/undefined values.
+ * @param value - The value to format
+ * @param fallback - The fallback value if the input is empty
+ * @returns The formatted value
+ */
+function formatField(value: string | undefined | null, fallback: string): string {
+  return value ?? fallback;
+}
+
+/**
+ * Formats comments from an issue or PR, optionally filtering by comment ID.
+ * @param comments - The array of comments to format
+ * @param commentId - Optional comment ID to filter out
+ * @param indent - The indentation string to use (default: '  - ')
+ * @returns The formatted comments string
+ */
+function formatComments(
+  comments: {
+    databaseId: number;
+    author: { login: string };
+    createdAt: string;
+    body: string;
+  }[],
+  commentId: number | undefined,
+  indent = '  - '
+): string {
+  return comments
+    .filter(c => commentId === undefined || c.databaseId !== commentId)
+    .map(c => `${indent}${c.author.login} at ${c.createdAt}: ${c.body}`)
+    .join('\n');
+}
+
+/**
+ * Formats files from a PR.
+ * @param files - The array of files to format
+ * @returns The formatted files string
+ */
+function formatFiles(
+  files: { path: string; changeType: string; additions: number; deletions: number }[]
+): string {
+  return files.map(f => `- ${f.path} (${f.changeType}) +${f.additions}/-${f.deletions}`).join('\n');
+}
+
+/**
+ * Formats reviews from a PR.
+ * @param reviews - The array of reviews to format
+ * @returns The formatted reviews string
+ */
+function formatReviews(
+  reviews: {
+    author: { login: string };
+    submittedAt: string;
+    body: string;
+    comments?: { path?: string; line?: number; body: string }[];
+  }[]
+): string {
+  return reviews
+    .map(r => {
+      const rc = (r.comments ?? [])
+        .map(c => `    - ${c.path ?? 'unknown'}:${c.line ?? '?'}: ${c.body}`)
+        .join('\n');
+      return `- ${r.author.login} at ${r.submittedAt}: ${r.body}${rc ? '\n' + rc : ''}`;
+    })
+    .join('\n');
+}
+
 // ── Issue Prompt Builder ───────────────────────────────────
 /**
  * Builds a prompt for the pi agent based on issue data.
@@ -15,15 +83,11 @@ const INSTRUCTIONS_MESSAGE =
 export function buildIssuePrompt(
   issue: IssueNode,
   userPrompt: string | null,
-  commentId: number
+  commentId: number | undefined
 ): string {
-  const comments = (issue.comments ?? [])
-    .filter(c => c.databaseId !== commentId)
-    .map(c => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
-    .join('\n');
-
-  const safeTitle = issue.title || '(no title)';
-  const safeBody = issue.body || '(no body)';
+  const safeTitle = formatField(issue.title, '(no title)');
+  const safeBody = formatField(issue.body, '(no body)');
+  const comments = formatComments(issue.comments ?? [], commentId);
 
   return [
     userPrompt ?? 'Summarize this issue and suggest next steps.',
@@ -52,27 +116,16 @@ export function buildIssuePrompt(
  * @param commentId - The comment ID to filter out from context
  * @returns The formatted prompt string
  */
-export function buildPRPrompt(pr: PRNode, userPrompt: string | null, commentId: number): string {
-  const comments = (pr.comments ?? [])
-    .filter(c => c.databaseId !== commentId)
-    .map(c => `- ${c.author.login} at ${c.createdAt}: ${c.body}`)
-    .join('\n');
-
-  const files = (pr.files ?? [])
-    .map(f => `- ${f.path} (${f.changeType}) +${f.additions}/-${f.deletions}`)
-    .join('\n');
-
-  const reviews = (pr.reviews ?? [])
-    .map(r => {
-      const rc = (r.comments ?? [])
-        .map(c => `    - ${c.path}:${c.line ?? '?'}: ${c.body}`)
-        .join('\n');
-      return `- ${r.author.login} at ${r.submittedAt}: ${r.body}${rc ? '\n' + rc : ''}`;
-    })
-    .join('\n');
-
-  const safeTitle = pr.title || '(no title)';
-  const safeBody = pr.body || '(no body)';
+export function buildPRPrompt(
+  pr: PRNode,
+  userPrompt: string | null,
+  commentId: number | undefined
+): string {
+  const safeTitle = formatField(pr.title, '(no title)');
+  const safeBody = formatField(pr.body, '(no body)');
+  const comments = formatComments(pr.comments ?? [], commentId, '- ');
+  const files = formatFiles(pr.files ?? []);
+  const reviews = formatReviews(pr.reviews ?? []);
 
   return [
     userPrompt ?? 'Review this PR and suggest improvements.',

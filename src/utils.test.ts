@@ -256,5 +256,39 @@ describe('utils', () => {
         { key: 'DEBUG', value: 'true' },
       ]);
     });
+
+    it('should throw for env var key starting with number', () => {
+      expect(() => parseEnvVars('1API_KEY=secret123')).toThrow(
+        "Invalid environment variable key '1API_KEY': must start with a letter or underscore and contain only letters, numbers, and underscores"
+      );
+    });
+
+    it('should throw for env var key with special characters', () => {
+      expect(() => parseEnvVars('API-KEY=secret123')).toThrow(
+        "Invalid environment variable key 'API-KEY': must start with a letter or underscore and contain only letters, numbers, and underscores"
+      );
+    });
+
+    it('should throw for env var key with spaces', () => {
+      expect(() => parseEnvVars('API KEY=secret123')).toThrow(
+        "Invalid environment variable key 'API KEY': must start with a letter or underscore and contain only letters, numbers, and underscores"
+      );
+    });
+
+    it('should throw for env var key starting with dot', () => {
+      expect(() => parseEnvVars('.API_KEY=secret123')).toThrow(
+        "Invalid environment variable key '.API_KEY': must start with a letter or underscore and contain only letters, numbers, and underscores"
+      );
+    });
+
+    it('should allow valid env var keys with underscores and numbers', () => {
+      const envVars = parseEnvVars('API_KEY_2=test123');
+      expect(envVars).toEqual([{ key: 'API_KEY_2', value: 'test123' }]);
+    });
+
+    it('should allow env var key starting with underscore', () => {
+      const envVars = parseEnvVars('_PRIVATE_KEY=secret');
+      expect(envVars).toEqual([{ key: '_PRIVATE_KEY', value: 'secret' }]);
+    });
   });
 });

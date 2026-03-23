@@ -107,12 +107,25 @@ export interface EnvVar {
 }
 
 /**
+ * Validates an environment variable key.
+ * @param key - The key to validate
+ * @returns true if valid, false otherwise
+ */
+function isValidEnvVarKey(key: string): boolean {
+  // Env var keys must be non-empty, contain only alphanumeric chars and underscores,
+  // and must not start with a number (POSIX convention)
+  const envVarKeyPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+  return envVarKeyPattern.test(key);
+}
+
+/**
  * Parses environment variables from a multi-line string.
  * @param envVarsString - Multi-line string with KEY=VALUE pairs
  * @returns Array of parsed environment variable key-value pairs
+ * @throws Error if any environment variable key is invalid
  */
 export function parseEnvVars(envVarsString: string): EnvVar[] {
-  if (!envVarsString || envVarsString.trim() === '') {
+  if (!envVarsString?.trim()) {
     return [];
   }
 
@@ -124,6 +137,13 @@ export function parseEnvVars(envVarsString: string): EnvVar[] {
       const equalIndex = line.indexOf('=');
       const key = line.slice(0, equalIndex).trim();
       const value = line.slice(equalIndex + 1).trim();
+
+      if (!isValidEnvVarKey(key)) {
+        throw new Error(
+          `Invalid environment variable key '${key}': must start with a letter or underscore and contain only letters, numbers, and underscores`
+        );
+      }
+
       return { key, value };
     });
 }
