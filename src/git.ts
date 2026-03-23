@@ -45,6 +45,26 @@ export class GitService {
     return output !== undefined && output.trim().length > 0;
   }
 
+  // ── Credential Configuration ───────────────────────────────
+  /**
+   * Configures git credentials for the current repository.
+   * This is done before running pi agent so it can detect push permissions.
+   */
+  configureCredentials(): void {
+    const { owner, repo } = github.context.repo;
+    const authUrl = `https://x-access-token:${this.token}@github.com/${owner}/${repo}.git`;
+
+    core.info('Configuring git credentials');
+    this.git(['config', 'credential.helper', 'store']);
+    this.git([
+      'config',
+      '--local',
+      `url.${authUrl}.insteadOf`,
+      `https://github.com/${owner}/${repo}`,
+    ]);
+    core.info('Git credentials configured');
+  }
+
   // ── Checkout Operations ───────────────────────────────────
   /**
    * Creates and checks out a new branch from the current state.

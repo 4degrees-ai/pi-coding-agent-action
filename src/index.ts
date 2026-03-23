@@ -60,6 +60,10 @@ async function handlePRWorkflow(
   commentId: number
 ): Promise<void> {
   const pr = gh.getPRData(issueNumber);
+
+  // Configure git credentials before running pi so it can detect push permissions
+  gitService.configureCredentials();
+
   const fullPrompt = buildPRPrompt(pr, userPrompt, commentId);
   const response = runPi(fullPrompt);
 
@@ -99,6 +103,9 @@ async function handleIssueWorkflow(
   const defaultBranch = github.context.payload.repository?.default_branch ?? 'main';
   const branch = generateBranchName('issue', issueNumber);
   gitService.checkoutBranch(branch);
+
+  // Configure git credentials before running pi so it can detect push permissions
+  gitService.configureCredentials();
 
   const issue = gh.getIssueData(issueNumber);
   const fullPrompt = buildIssuePrompt(issue, userPrompt, commentId);
