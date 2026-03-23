@@ -15,6 +15,26 @@ export interface IssueNode {
   comments?: IssueComment[];
 }
 
+export interface PRFileChange {
+  path: string;
+  additions: number;
+  deletions: number;
+  changeType: string;
+}
+
+export interface PRReviewComment {
+  path?: string;
+  line?: number;
+  body: string;
+}
+
+export interface PRReview {
+  author: { login: string };
+  body: string;
+  submittedAt: string;
+  comments?: PRReviewComment[];
+}
+
 export interface PRNode {
   title: string;
   body: string;
@@ -22,32 +42,17 @@ export interface PRNode {
   author: { login: string };
   baseRefName: string;
   headRefName: string;
-  headRefOid: string;
+  // headRefOid is included by the GitHub CLI but not currently used
+  headRefOid?: string;
   createdAt: string;
   additions: number;
   deletions: number;
   baseRepository: { nameWithOwner: string };
   headRepository: { nameWithOwner: string };
-  commits: {
-    totalCount: number;
-  };
-  files?: {
-    path: string;
-    additions: number;
-    deletions: number;
-    changeType: string;
-  }[];
+  commits: { totalCount: number };
+  files?: PRFileChange[];
   comments?: IssueComment[];
-  reviews?: {
-    author: { login: string };
-    body: string;
-    submittedAt: string;
-    comments?: {
-      path?: string;
-      line?: number;
-      body: string;
-    }[];
-  }[];
+  reviews?: PRReview[];
 }
 
 // ── Git Types ─────────────────────────────────────────────────────

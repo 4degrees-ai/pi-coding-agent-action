@@ -4,14 +4,15 @@ import { HttpClient } from '@actions/http-client';
 import * as isoGit from 'isomorphic-git';
 import fs from 'node:fs';
 import type { GitAuthor } from './types.js';
+import { DEFAULT_COMMITTER_NAME, DEFAULT_COMMITTER_EMAIL } from './constants.js';
 
 // ── Constants ────────────────────────────────────────────────
 /**
  * Default committer for git commits made by the pi agent.
  */
 const DEFAULT_COMMITTER: GitAuthor = {
-  name: 'pi-agent[bot]',
-  email: 'pi-agent[bot]@users.noreply.github.com',
+  name: DEFAULT_COMMITTER_NAME,
+  email: DEFAULT_COMMITTER_EMAIL,
 };
 
 // ── GitService Class ─────────────────────────────────────────
@@ -193,13 +194,14 @@ export class GitService {
         body?: string | Buffer | null | AsyncIterable<Uint8Array>;
       }) {
         // Convert body to format expected by @actions/http-client
-        let body: string | ReadableStream | null = null;
+        // Note: AsyncIterable body is not supported by HttpClient and will be skipped
+        // This is acceptable for git operations which don't typically use streaming bodies
+        let body: string | null = null;
         if (typeof options.body === 'string') {
           body = options.body;
         } else if (Buffer.isBuffer(options.body)) {
           body = options.body.toString('utf-8');
         }
-        // AsyncIterable is not supported by HttpClient, skip body for those cases
 
         const response = await httpClient.request(
           options.url,

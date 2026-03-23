@@ -1,14 +1,8 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { runCommand } from './utils.js';
-import { GH_TIMEOUT_MS } from './constants.js';
+import { GH_TIMEOUT_MS, type GitHubReaction } from './constants.js';
 import type { IssueNode, PRNode } from './types.js';
-
-// ── Constants ─────────────────────────────────────────────
-/**
- * Valid GitHub reaction content types.
- */
-type GitHubReaction = '+1' | '-1' | 'laugh' | 'hooray' | 'confused' | 'heart' | 'rocket' | 'eyes';
 
 // ── GitHubClient ─────────────────────────────────────────────
 /**
@@ -44,13 +38,22 @@ class GitHubClient {
    * @param command - The command arguments (without 'gh' prefix)
    * @param options - Optional input to provide to stdin
    * @returns The stdout output from the command
+   * @throws Error with context about the command that failed
    */
   cli(command: string[], options?: { input?: string }): string {
     const env = { ...process.env };
     if (this.token) {
       env.GH_TOKEN = this.token;
     }
-    return runCommand(['gh', ...command], { ...options, timeout: GH_TIMEOUT_MS }, env);
+
+    try {
+      return runCommand(['gh', ...command], { ...options, timeout: GH_TIMEOUT_MS }, env);
+    } catch (error) {
+      // Enhance error message with command context
+      const commandStr = `gh ${command.join(' ')}`;
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`GitHub CLI command failed: ${commandStr}\n${message}`);
+    }
   }
 
   /**

@@ -3,7 +3,13 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { parseEnvVars, runCommand } from './utils.js';
-import { PI_TIMEOUT_MS } from './constants.js';
+import {
+  PI_TIMEOUT_MS,
+  DEFAULT_PI_PROVIDER,
+  DEFAULT_PI_MODEL,
+  PROMPT_TEMP_FILE,
+  SYSTEM_PROMPT_TEMP_FILE_PREFIX,
+} from './constants.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 /**
@@ -28,15 +34,15 @@ function safeRemoveFile(filePath: string): void {
  * @throws Error if pi exits with non-zero status
  */
 export function runPi(prompt: string, overrideProvider?: string, overrideModel?: string): string {
-  const provider = (overrideProvider ?? core.getInput('provider')) || 'anthropic';
-  const model = (overrideModel ?? core.getInput('model')) || 'claude-sonnet-4-5';
-  const extraTools = core.getInput('extra_tools') || '';
-  const customSystemPrompt = core.getInput('prompt') || '';
-  const envVarsString = core.getInput('env_vars') || '';
+  const provider = overrideProvider ?? core.getInput('provider') ?? DEFAULT_PI_PROVIDER;
+  const model = overrideModel ?? core.getInput('model') ?? DEFAULT_PI_MODEL;
+  const extraTools = core.getInput('extra_tools') ?? '';
+  const customSystemPrompt = core.getInput('prompt') ?? '';
+  const envVarsString = core.getInput('env_vars') ?? '';
   const envVars = parseEnvVars(envVarsString);
 
   // Write prompt to a temp file to avoid shell escaping issues
-  const promptFile = path.join(os.tmpdir(), 'pi_prompt.md');
+  const promptFile = path.join(os.tmpdir(), PROMPT_TEMP_FILE);
   fs.writeFileSync(promptFile, prompt, 'utf8');
 
   const args = [
@@ -56,37 +62,43 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
   let systemPromptFile = '';
   if (hasCustomSystemPrompt) {
     // Write SYSTEM.md to a temp file to avoid conflicts
-    systemPromptFile = path.join(os.tmpdir(), `pi_system_${Date.now()}.md`);
+    systemPromptFile = path.join(os.tmpdir(), `${SYSTEM_PROMPT_TEMP_FILE_PREFIX}_${Date.now()}.md`);
     fs.writeFileSync(systemPromptFile, customSystemPrompt, 'utf8');
   }
 
-  core.info(`Running: pi ${args.join(' ')}`);
+  try {
+    core.info(`Running: pi ${args.join(' ')}`);
 
-  // Inject custom environment variables
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const { key, value } of envVars) {
-    core.info(`Setting env var: ${key}=***`);
-    env[key] = value;
+    // Inject custom environment variables
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    for (const { key, value } of envVars) {
+      core.info(`Setting env var: ${key}=***`);
+      env[key] = value;
+    }
+
+    const rawOutput = runCommand(
+      ['pi', ...args],
+      { timeout: PI_TIMEOUT_MS, stdio: 'inherit' },
+      env
+    );
+
+    // Log the raw output for visibility in GitHub Actions logs
+    core.info(`Pi raw output:\n${rawOutput}`);
+
+    // Filter the output to extract only the final meaningful response
+    const filteredOutput = filterPiOutput(rawOutput);
+
+    // Log the filtered output for visibility
+    core.info(`Pi filtered output:\n${filteredOutput}`);
+
+    return filteredOutput;
+  } finally {
+    // Clean up temp files even if an error occurs
+    safeRemoveFile(promptFile);
+    if (hasCustomSystemPrompt && systemPromptFile) {
+      safeRemoveFile(systemPromptFile);
+    }
   }
-
-  const rawOutput = runCommand(['pi', ...args], { timeout: PI_TIMEOUT_MS, stdio: 'inherit' }, env);
-
-  // Clean up temp files
-  safeRemoveFile(promptFile);
-  if (hasCustomSystemPrompt && systemPromptFile) {
-    safeRemoveFile(systemPromptFile);
-  }
-
-  // Log the raw output for visibility in GitHub Actions logs
-  core.info(`Pi raw output:\n${rawOutput}`);
-
-  // Filter the output to extract only the final meaningful response
-  const filteredOutput = filterPiOutput(rawOutput);
-
-  // Log the filtered output for visibility
-  core.info(`Pi filtered output:\n${filteredOutput}`);
-
-  return filteredOutput;
 }
 
 // ── Constants ─────────────────────────────────────────────

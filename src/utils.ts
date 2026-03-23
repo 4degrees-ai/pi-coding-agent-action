@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import { spawnSync } from 'child_process';
 import { Temporal } from '@js-temporal/polyfill';
+import { DEFAULT_MENTION, PI_BRANCH_PREFIX } from './constants.js';
 
 // ── CLI Helper ───────────────────────────────────────────────────
 /**
@@ -41,8 +42,9 @@ export function runCommand(
  * @returns Array of mention strings (e.g., ['/pi', '@bot'])
  */
 export function getMentions(): string[] {
-  const raw = core.getInput('mentions') || '/pi';
-  return raw.split(',').map(m => m.trim().toLowerCase());
+  const raw = core.getInput('mentions');
+  const value = raw || DEFAULT_MENTION;
+  return value.split(',').map(m => m.trim().toLowerCase());
 }
 
 /**
@@ -95,7 +97,7 @@ export function generateBranchName(type: string, issueNumber: number): string {
   const now = Temporal.Now.plainDateTimeISO();
   // Format: YYYYMMDDHHmmss
   const timestamp = `${now.year}${String(now.month).padStart(2, '0')}${String(now.day).padStart(2, '0')}${String(now.hour).padStart(2, '0')}${String(now.minute).padStart(2, '0')}${String(now.second).padStart(2, '0')}`;
-  return `pi/${type}${issueNumber}-${timestamp}`;
+  return `${PI_BRANCH_PREFIX}/${type}${issueNumber}-${timestamp}`;
 }
 
 // ── Environment Variables ───────────────────────────────────────
