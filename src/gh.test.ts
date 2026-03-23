@@ -9,6 +9,9 @@ describe('GitHubClient', () => {
   let getOctokitSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
+    // Set GITHUB_REPOSITORY environment variable for context.repo
+    process.env.GITHUB_REPOSITORY = 'owner/repo';
+
     // Spy on getInput
     getInputSpy = spyOn(core, 'getInput').mockImplementation((name: string) => {
       if (name === 'github_token') {
@@ -25,7 +28,8 @@ describe('GitHubClient', () => {
           updateComment: mock(() => Promise.resolve({ data: {} })),
         },
         reactions: {
-          createForIssueComment: mock(() => Promise.resolve({ data: {} })),
+          createForIssueComment: mock(() => Promise.resolve({ data: { id: 123 } })),
+          deleteForIssueComment: mock(() => Promise.resolve({ data: {} })),
         },
         pulls: {
           create: mock(() => Promise.resolve({ data: { number: 42 } })),
@@ -37,6 +41,7 @@ describe('GitHubClient', () => {
   afterEach(() => {
     getInputSpy.mockRestore();
     getOctokitSpy.mockRestore();
+    delete process.env.GITHUB_REPOSITORY;
   });
 
   describe('cli method', () => {
@@ -136,6 +141,31 @@ describe('GitHubClient', () => {
       promise.catch(() => {
         // Suppress any unhandled rejections
       });
+    });
+
+    it('should return the reaction ID', async () => {
+      const reactionId = await gh.addReaction(1, 'eyes');
+      expect(typeof reactionId).toBe('number');
+      expect(reactionId).toBe(123);
+    });
+  });
+
+  describe('removeReaction method', () => {
+    it('should be available on gh instance', () => {
+      expect(typeof gh.removeReaction).toBe('function');
+    });
+
+    it('should be async', () => {
+      const promise = gh.removeReaction(1, 123);
+      expect(promise).toBeInstanceOf(Promise);
+      promise.catch(() => {
+        // Suppress any unhandled rejections
+      });
+    });
+
+    it('should complete without throwing', async () => {
+      await gh.removeReaction(1, 123);
+      expect(true).toBe(true);
     });
   });
 
