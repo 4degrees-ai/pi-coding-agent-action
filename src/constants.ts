@@ -4,3 +4,13 @@
  * Timeout for pi agent execution in milliseconds (60 minutes).
  */
 export const PI_TIMEOUT_MS = 60 * 60 * 1000;
+
+/**
+ * Timeout for GitHub CLI operations in milliseconds (10 seconds).
+ */
+export const GH_TIMEOUT_MS = 10 * 1000;
+
+/**
+ * Default GitHub branch name.
+ */
+export const DEFAULT_GITHUB_BRANCH = 'main';

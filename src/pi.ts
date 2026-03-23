@@ -1,10 +1,22 @@
 import * as core from '@actions/core';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync } from 'child_process';
 import * as fs from 'fs';
-import { parseEnvVars } from './utils.js';
+import { parseEnvVars, runCommand } from './utils.js';
 import { PI_TIMEOUT_MS } from './constants.js';
+
+// ── Helpers ──────────────────────────────────────────────────
+/**
+ * Safely removes a file if it exists, logging any errors as debug messages.
+ * @param filePath - The path to the file to remove
+ */
+function safeRemoveFile(filePath: string): void {
+  try {
+    fs.unlinkSync(filePath);
+  } catch (e) {
+    core.debug(`Failed to clean up file ${filePath}: ${e}`);
+  }
+}
 
 // ── Run Pi Agent ───────────────────────────────────────────
 /**
@@ -40,9 +52,12 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
     args.push('--tools', extraTools);
   }
 
-  if (customSystemPrompt) {
-    // Write SYSTEM.md to current directory so pi picks it up
-    fs.writeFileSync('SYSTEM.md', customSystemPrompt, 'utf8');
+  const hasCustomSystemPrompt = Boolean(customSystemPrompt);
+  let systemPromptFile = '';
+  if (hasCustomSystemPrompt) {
+    // Write SYSTEM.md to a temp file to avoid conflicts
+    systemPromptFile = path.join(os.tmpdir(), `pi_system_${Date.now()}.md`);
+    fs.writeFileSync(systemPromptFile, customSystemPrompt, 'utf8');
   }
 
   core.info(`Running: pi ${args.join(' ')}`);
@@ -54,34 +69,13 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
     env[key] = value;
   }
 
-  const result = spawnSync('pi', args, {
-    stdio: ['pipe', 'pipe', 'inherit'], // Pipe stdout to capture, inherit stderr for visibility
-    encoding: 'utf8',
-    timeout: PI_TIMEOUT_MS,
-    env,
-  });
+  const rawOutput = runCommand(['pi', ...args], { timeout: PI_TIMEOUT_MS, stdio: 'inherit' }, env);
 
-  // Clean up
-  try {
-    fs.unlinkSync(promptFile);
-  } catch (e) {
-    core.debug(`Failed to clean up prompt temp file: ${e}`);
+  // Clean up temp files
+  safeRemoveFile(promptFile);
+  if (hasCustomSystemPrompt && systemPromptFile) {
+    safeRemoveFile(systemPromptFile);
   }
-  if (customSystemPrompt) {
-    try {
-      fs.unlinkSync('SYSTEM.md');
-    } catch (e) {
-      core.debug(`Failed to clean up SYSTEM.md: ${e}`);
-    }
-  }
-
-  if (result.status !== 0) {
-    const errMsg =
-      result.stderr || (result.error as Error)?.message || 'pi exited with non-zero status';
-    throw new Error(`pi agent failed:\n${errMsg}`);
-  }
-
-  const rawOutput = (result.stdout || '').trim();
 
   // Log the raw output for visibility in GitHub Actions logs
   core.info(`Pi raw output:\n${rawOutput}`);
@@ -94,6 +88,30 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
 
   return filteredOutput;
 }
+
+// ── Constants ─────────────────────────────────────────────
+/**
+ * Patterns that indicate interim or progress messages to be filtered from pi output.
+ */
+const INTERIM_PATTERNS: RegExp[] = [
+  // "I've started" or similar patterns
+  /^(I've|I have|I'm|I am) (started|begun)/i,
+  // "Now implementing", "Next working", etc.
+  /^(Now|Next|Then|After|Before|While|During|Following|Proceeding|Continuing) (working|processing|implementing)/i,
+  // Single word status messages
+  /^(Done|Finished|Completed|Ready)\.$/i,
+  // Progress indicators like [1/3]
+  /^\[\d+\/\d+\]$/i,
+  // Status indicators like [DONE], [TODO]
+  /^\[[A-Z]+\]$/i,
+  // Short lines that look like status updates (no punctuation, very short)
+  /^(Fixing|Done|OK|Ready|Working|Processing|Starting|Stopping)(\.*)$/i,
+];
+
+/**
+ * Generic prefix patterns for commit message summarization.
+ */
+const GENERIC_PREFIX_PATTERN = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
 
 // ── Filter Pi Output ───────────────────────────────────────
 /**
@@ -114,26 +132,9 @@ export function filterPiOutput(output: string): string {
     return '';
   }
 
-  // Patterns that indicate interim or progress messages
-  // These are specific patterns that suggest progress updates, not final content
-  const interimPatterns = [
-    // "I've started" or similar patterns
-    /^(I've|I have|I'm|I am) (started|begun)/i,
-    // "Now implementing", "Next working", etc.
-    /^(Now|Next|Then|After|Before|While|During|Following|Proceeding|Continuing) (working|processing|implementing)/i,
-    // Single word status messages
-    /^(Done|Finished|Completed|Ready)\.$/i,
-    // Progress indicators like [1/3]
-    /^\[\d+\/\d+\]$/i,
-    // Status indicators like [DONE], [TODO]
-    /^\[[A-Z]+\]$/i,
-    // Short lines that look like status updates (no punctuation, very short)
-    /^(Fixing|Done|OK|Ready|Working|Processing|Starting|Stopping)(\.*)$/i,
-  ];
-
   // Filter out interim messages
   const filteredLines = trimmedLines.filter(line => {
-    return !interimPatterns.some(pattern => pattern.test(line));
+    return !INTERIM_PATTERNS.some(pattern => pattern.test(line));
   });
 
   // If filtering removed everything, return original
@@ -153,29 +154,20 @@ export function filterPiOutput(output: string): string {
  * @returns A short summary suitable for a git commit message
  */
 export function summarize(text: string, issueNumber: number): string {
-  // Simple heuristic: use first line, truncated to 50 characters
   const firstLine = text.split('\n')[0].trim();
 
-  // If first line is short enough and not too generic, use it directly
-  if (firstLine.length > 0 && firstLine.length <= 50) {
-    const genericPatterns = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
-    if (!genericPatterns.test(firstLine)) {
-      return firstLine;
-    }
+  // Use first line if it's short enough and not generic
+  if (firstLine.length > 0 && firstLine.length <= 50 && !GENERIC_PREFIX_PATTERN.test(firstLine)) {
+    return firstLine;
   }
 
-  // For longer or more complex responses, use the first sentence or phrase
+  // For longer or generic first lines, use the first sentence or phrase
   const firstSentence = text
     .split(/[.!?\n]/)[0]
     .trim()
-    .replace(/^(I|I'll|Sure|OK|Great|Here|The|This|A)\s+/i, '')
+    .replace(GENERIC_PREFIX_PATTERN, '')
     .substring(0, 50)
     .trim();
 
-  if (firstSentence.length > 5) {
-    return firstSentence;
-  }
-
-  // Fallback to generic message
-  return `Fix issue #${issueNumber}`;
+  return firstSentence.length > 5 ? firstSentence : `Fix issue #${issueNumber}`;
 }

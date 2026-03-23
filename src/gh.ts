@@ -1,7 +1,14 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { runCommand } from './utils.js';
+import { GH_TIMEOUT_MS } from './constants.js';
 import type { IssueNode, PRNode } from './types.js';
+
+// ── Constants ─────────────────────────────────────────────
+/**
+ * Valid GitHub reaction content types.
+ */
+type GitHubReaction = '+1' | '-1' | 'laugh' | 'hooray' | 'confused' | 'heart' | 'rocket' | 'eyes';
 
 // ── GitHubClient ─────────────────────────────────────────────
 /**
@@ -43,7 +50,7 @@ class GitHubClient {
     if (this.token) {
       env.GH_TOKEN = this.token;
     }
-    return runCommand(['gh', ...command], options, env);
+    return runCommand(['gh', ...command], { ...options, timeout: GH_TIMEOUT_MS }, env);
   }
 
   /**
@@ -63,7 +70,9 @@ class GitHubClient {
     try {
       return JSON.parse(output);
     } catch (e) {
-      throw new Error(`Failed to parse issue data: ${e}`);
+      throw new Error(
+        `Failed to parse issue data for #${issueNumber}: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 
@@ -84,7 +93,9 @@ class GitHubClient {
     try {
       return JSON.parse(output);
     } catch (e) {
-      throw new Error(`Failed to parse PR data: ${e}`);
+      throw new Error(
+        `Failed to parse PR data for #${prNumber}: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 
@@ -111,7 +122,7 @@ class GitHubClient {
    * @param content - The reaction content (e.g., 'eyes', 'rocket', '+1')
    * @returns The reaction ID, which can be used to remove the reaction later
    */
-  async addReaction(commentId: number, content: string): Promise<number> {
+  async addReaction(commentId: number, content: GitHubReaction): Promise<number> {
     const octokit = this.getOctokit();
     const { owner, repo } = this.getRepoContext();
 
@@ -119,15 +130,7 @@ class GitHubClient {
       owner,
       repo,
       comment_id: commentId,
-      content: content as
-        | '+1'
-        | '-1'
-        | 'laugh'
-        | 'hooray'
-        | 'confused'
-        | 'heart'
-        | 'rocket'
-        | 'eyes',
+      content,
     });
 
     return result.data.id;

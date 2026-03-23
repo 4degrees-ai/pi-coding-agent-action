@@ -1,26 +1,28 @@
 import * as core from '@actions/core';
 import { spawnSync } from 'child_process';
+import { Temporal } from '@js-temporal/polyfill';
 
 // ── CLI Helper ───────────────────────────────────────────────────
 /**
  * Runs a shell command and returns its output.
  * @param cmd - The command and arguments to run
- * @param options - Optional input to provide to stdin
+ * @param options - Optional configuration (input, timeout, stdio)
  * @param env - Optional environment variables to override
  * @returns The stdout output from the command
  * @throws Error if the command exits with a non-zero status
  */
 export function runCommand(
   cmd: string[],
-  options?: { input?: string },
+  options?: { input?: string; timeout?: number; stdio?: 'pipe' | 'inherit' },
   env?: NodeJS.ProcessEnv
 ): string {
   core.info(`Running: ${cmd.join(' ')}`);
 
   const result = spawnSync(cmd[0], cmd.slice(1), {
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', options?.stdio || 'pipe'],
     encoding: 'utf8',
     input: options?.input,
+    timeout: options?.timeout,
     env: env ? { ...process.env, ...env } : { ...process.env },
   });
 
@@ -61,8 +63,9 @@ export function assertKeyword(body: string): void {
       lower.endsWith(' ' + m)
   );
   if (!matched) {
-    core.setFailed(`Comment must contain one of: ${mentions.join(', ')}`);
-    throw new Error(`Comment must contain one of: ${mentions.join(', ')}`);
+    const message = `Comment must contain one of: ${mentions.join(', ')}`;
+    core.setFailed(message);
+    throw new Error(message);
   }
 }
 
@@ -91,12 +94,10 @@ export function extractUserPrompt(body: string): string | null {
  * @returns A unique branch name (e.g., 'pi/issue123-20260322123456')
  */
 export function generateBranchName(type: string, issueNumber: number): string {
-  const ts = new Date()
-    .toISOString()
-    .replace(/[:-]/g, '')
-    .replace(/\.\d{3}Z/, '')
-    .replace('T', '');
-  return `pi/${type}${issueNumber}-${ts}`;
+  const now = Temporal.Now.plainDateTimeISO();
+  // Format: YYYYMMDDHHmmss
+  const timestamp = `${now.year}${String(now.month).padStart(2, '0')}${String(now.day).padStart(2, '0')}${String(now.hour).padStart(2, '0')}${String(now.minute).padStart(2, '0')}${String(now.second).padStart(2, '0')}`;
+  return `pi/${type}${issueNumber}-${timestamp}`;
 }
 
 // ── Environment Variables ───────────────────────────────────────

@@ -5,6 +5,7 @@ import { gh } from './gh.js';
 import { GitService } from './git.js';
 import { buildIssuePrompt, buildPRPrompt } from './prompts.js';
 import { runPi, summarize } from './pi.js';
+import { DEFAULT_GITHUB_BRANCH } from './constants.js';
 
 interface IssueCommentPayload {
   id: number;
@@ -18,27 +19,37 @@ interface IssueWithPR {
 
 interface GitHubPayload {
   issue?: IssueWithPR;
-  comment?: IssueCommentPayload;
+  comment?: IssueCommentPayload | undefined;
 }
 
 // ── Configuration ─────────────────────────────────────────────
 const GITHUB_TOKEN = core.getInput('github_token');
 const ACTOR = github.context.actor;
 
-function setupGitService(): GitService {
-  const gitService = new GitService(GITHUB_TOKEN);
-  return gitService;
+/**
+ * Builds the GitHub Actions run URL for logging.
+ * @returns The URL to view the current workflow run
+ */
+function buildRunUrl(): string {
+  const serverUrl = github.context.serverUrl || 'https://github.com';
+  const owner = github.context.repo.owner || 'unknown';
+  const repo = github.context.repo.repo || 'unknown';
+  const runId = process.env.GITHUB_RUN_ID ?? 'unknown';
+  return `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
 }
 
 function extractContext(payload: GitHubPayload) {
-  const issueNumber = payload.issue!.number;
+  if (!payload.issue) {
+    throw new Error('GitHub payload is missing issue data');
+  }
+
+  const issueNumber = payload.issue.number;
   const commentBody = payload.comment?.body ?? '';
   const commentId = payload.comment?.id ?? 0;
 
   assertKeyword(commentBody);
   const userPrompt = extractUserPrompt(commentBody) ?? '';
-
-  const runUrl = `${github.context.serverUrl}/${github.context.repo.owner}/${github.context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID ?? 'unknown'}`;
+  const runUrl = buildRunUrl();
 
   return { issueNumber, userPrompt, runUrl, commentId };
 }
@@ -100,7 +111,7 @@ async function handleIssueWorkflow(
   runUrl: string,
   commentId: number
 ): Promise<void> {
-  const defaultBranch = github.context.payload.repository?.default_branch ?? 'main';
+  const defaultBranch = github.context.payload.repository?.default_branch ?? DEFAULT_GITHUB_BRANCH;
   const branch = generateBranchName('issue', issueNumber);
   await gitService.checkoutBranch(branch);
 
@@ -132,19 +143,19 @@ async function handleIssueWorkflow(
 }
 
 async function handleError(err: unknown): Promise<void> {
-  core.error(err instanceof Error ? err.message : String(err));
   const msg = err instanceof Error ? err.message : String(err);
-  const serverUrl = github.context.serverUrl || 'https://github.com';
-  const owner = github.context.repo.owner || 'unknown';
-  const repo = github.context.repo.repo || 'unknown';
-  const runId = process.env.GITHUB_RUN_ID ?? 'unknown';
-  const runUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
-  const issueNumber = github.context.payload.issue!.number;
+  core.error(msg);
+  const runUrl = buildRunUrl();
+  const issueNumber = github.context.payload.issue?.number;
 
-  await gh.createComment(
-    issueNumber,
-    `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`
-  );
+  if (issueNumber !== undefined) {
+    await gh.createComment(
+      issueNumber,
+      `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`
+    );
+  } else {
+    core.error(`[View run](${runUrl})`);
+  }
   core.setFailed(msg);
 }
 
@@ -163,7 +174,7 @@ async function run(): Promise<void> {
     // Add "eyes" reaction to indicate work has started
     reactionId = await gh.addReaction(commentId, 'eyes');
 
-    const gitService = setupGitService();
+    const gitService = new GitService(GITHUB_TOKEN);
 
     const isPR = Boolean(payload.issue?.pull_request);
 
@@ -185,7 +196,7 @@ async function run(): Promise<void> {
   }
 }
 
-// Only run if this is the main module (not during imports)
+// Only run if this file is being executed directly (not imported)
 if (require.main === module) {
   run().catch(handleError);
 }
