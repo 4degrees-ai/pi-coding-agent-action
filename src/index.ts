@@ -140,7 +140,14 @@ async function handleIssueWorkflow(
     const prBody = `${response}\n\nCloses #${issueNumber}\n\n[View run](${runUrl})`;
     const prNumber = await gh.createPR(defaultBranch, branch, summary, prBody);
 
-    await gh.createComment(issueNumber, `Created PR #${prNumber}\n\n[View run](${runUrl})`);
+    const serverUrl = github.context.serverUrl || 'https://github.com';
+    const { owner, repo } = github.context.repo;
+    const prUrl = `${serverUrl}/${owner}/${repo}/pull/${prNumber}`;
+
+    await gh.createComment(
+      issueNumber,
+      `Created PR [${prNumber}](${prUrl})\n\n[View run](${runUrl})`
+    );
   } else {
     await gh.createComment(issueNumber, `${response}\n\n[View run](${runUrl})`);
   }
