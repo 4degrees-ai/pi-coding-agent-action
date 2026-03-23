@@ -6,7 +6,7 @@ on:
   push:
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,14 +21,11 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run type check
-        run: bun run type-check
+      - name: Run checks
+        run: bun run validate
 
-      - name: Run linter
-        run: bun run lint
-
-      - name: Check formatting
-        run: bun run format
+      - name: Run tests
+        run: bun run test
 
       - name: Bundle with esbuild
         run: bun run package
