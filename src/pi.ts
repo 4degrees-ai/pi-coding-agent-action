@@ -55,7 +55,7 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
   }
 
   const result = spawnSync('pi', args, {
-    stdio: ['pipe', 'inherit', 'inherit'], // Inherit stdout and stderr
+    stdio: ['pipe', 'pipe', 'inherit'], // Pipe stdout to capture, inherit stderr for visibility
     encoding: 'utf8',
     timeout: PI_TIMEOUT_MS,
     env,
@@ -81,7 +81,12 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
     throw new Error(`pi agent failed:\n${errMsg}`);
   }
 
-  return (result.stdout || '').trim();
+  const output = (result.stdout || '').trim();
+
+  // Log the output for visibility in GitHub Actions logs
+  core.info(`Pi output:\n${output}`);
+
+  return output;
 }
 
 // ── Summarize ─────────────────────────────────────────────
