@@ -81,12 +81,67 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
     throw new Error(`pi agent failed:\n${errMsg}`);
   }
 
-  const output = (result.stdout || '').trim();
+  const rawOutput = (result.stdout || '').trim();
 
-  // Log the output for visibility in GitHub Actions logs
-  core.info(`Pi output:\n${output}`);
+  // Log the raw output for visibility in GitHub Actions logs
+  core.info(`Pi raw output:\n${rawOutput}`);
 
-  return output;
+  // Filter the output to extract only the final meaningful response
+  const filteredOutput = filterPiOutput(rawOutput);
+
+  // Log the filtered output for visibility
+  core.info(`Pi filtered output:\n${filteredOutput}`);
+
+  return filteredOutput;
+}
+
+// ── Filter Pi Output ───────────────────────────────────────
+/**
+ * Filters pi agent output to extract only the final meaningful response.
+ * Removes interim messages, duplicates, and progress updates.
+ * @param output - The raw output from pi
+ * @returns The filtered output with only the final meaningful response
+ */
+export function filterPiOutput(output: string): string {
+  if (!output || output.trim().length === 0) {
+    return '';
+  }
+
+  const lines = output.split('\n');
+  const trimmedLines = lines.map(line => line.trim()).filter(line => line.length > 0);
+
+  if (trimmedLines.length === 0) {
+    return '';
+  }
+
+  // Patterns that indicate interim or progress messages
+  // These are specific patterns that suggest progress updates, not final content
+  const interimPatterns = [
+    // "I've started" or similar patterns
+    /^(I've|I have|I'm|I am) (started|begun)/i,
+    // "Now implementing", "Next working", etc.
+    /^(Now|Next|Then|After|Before|While|During|Following|Proceeding|Continuing) (working|processing|implementing)/i,
+    // Single word status messages
+    /^(Done|Finished|Completed|Ready)\.$/i,
+    // Progress indicators like [1/3]
+    /^\[\d+\/\d+\]$/i,
+    // Status indicators like [DONE], [TODO]
+    /^\[[A-Z]+\]$/i,
+    // Short lines that look like status updates (no punctuation, very short)
+    /^(Fixing|Done|OK|Ready|Working|Processing|Starting|Stopping)(\.*)$/i,
+  ];
+
+  // Filter out interim messages
+  const filteredLines = trimmedLines.filter(line => {
+    return !interimPatterns.some(pattern => pattern.test(line));
+  });
+
+  // If filtering removed everything, return original
+  if (filteredLines.length === 0) {
+    return trimmedLines.join('\n');
+  }
+
+  return filteredLines.join('\n');
 }
 
 // ── Summarize ─────────────────────────────────────────────
