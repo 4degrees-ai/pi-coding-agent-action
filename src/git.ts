@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { HttpClient } from '@actions/http-client';
 import * as isoGit from 'isomorphic-git';
+import http from 'isomorphic-git/http/node';
 import fs from 'node:fs';
 import type { GitAuthor } from './types.js';
 import { DEFAULT_COMMITTER_NAME, DEFAULT_COMMITTER_EMAIL } from './constants.js';
@@ -23,7 +23,6 @@ const DEFAULT_COMMITTER: GitAuthor = {
 export class GitService {
   private readonly dir: string;
   private readonly token: string;
-  private httpClient: HttpClient | undefined;
 
   constructor(token: string, dir: string = process.cwd()) {
     this.token = token;
@@ -125,7 +124,16 @@ export class GitService {
     branch: string
   ): Promise<void> {
     const { owner, repo } = github.context.repo;
+    core.info(`GitHub context: owner="${owner}", repo="${repo}"`);
+
+    if (!owner || !repo) {
+      throw new Error(
+        `Invalid repository context: owner="${owner}", repo="${repo}". Cannot construct push URL.`
+      );
+    }
+
     const authUrl = `https://github.com/${owner}/${repo}.git`;
+    core.info(`Pushing to URL: ${authUrl}`);
 
     core.info('Staging all changes');
 
@@ -170,13 +178,13 @@ export class GitService {
     // Push with embedded auth token
     await isoGit.push({
       fs,
-      http: this.createHttpAdapter(),
+      http,
       dir: this.dir,
       url: authUrl,
       ref: `refs/heads/${branch}`,
       onAuth: () => ({
-        username: this.token,
-        password: 'x-oauth-basic',
+        username: 'oauth2',
+        password: this.token,
       }),
       onProgress: progress => {
         if (progress.phase) {
@@ -189,65 +197,4 @@ export class GitService {
   }
 
   // ── Helper Methods ─────────────────────────────────────────
-
-  /**
-   * Gets the appropriate HTTP client for isomorphic-git.
-   * Uses @actions/http-client for making HTTP requests.
-   * The client instance is cached to avoid creating multiple instances.
-   */
-  private getHttpClient() {
-    this.httpClient ??= new HttpClient();
-    return this.httpClient;
-  }
-
-  /**
-   * Creates the adapter function for isomorphic-git HTTP requests.
-   * Uses @actions/http-client for making HTTP requests.
-   */
-  private createHttpAdapter() {
-    const httpClient = this.getHttpClient();
-
-    return {
-      async request(options: {
-        url: string;
-        method?: string;
-        headers?: Record<string, string>;
-        body?: string | Buffer | null | AsyncIterable<Uint8Array>;
-      }) {
-        // Convert body to format expected by @actions/http-client
-        // Note: AsyncIterable body is not supported by HttpClient and will be skipped
-        // This is acceptable for git operations which don't typically use streaming bodies
-        let body: string | null = null;
-        if (typeof options.body === 'string') {
-          body = options.body;
-        } else if (Buffer.isBuffer(options.body)) {
-          body = options.body.toString('utf-8');
-        }
-
-        const response = await httpClient.request(
-          options.url,
-          options.method ?? 'GET',
-          body,
-          options.headers
-        );
-
-        const statusCode = response.message.statusCode ?? 0;
-        const statusMessage = response.message.statusMessage ?? '';
-
-        // Check for HTTP errors
-        if (statusCode >= 400) {
-          throw new Error(`HTTP ${statusCode} ${statusMessage}: Failed to fetch ${options.url}`);
-        }
-
-        return {
-          url: options.url,
-          method: options.method ?? 'GET',
-          headers: response.message.headers as Record<string, string>,
-          body: response.message as unknown as AsyncIterableIterator<Uint8Array>,
-          statusCode,
-          statusMessage,
-        };
-      },
-    };
-  }
 }

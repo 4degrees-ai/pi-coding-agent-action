@@ -148,7 +148,6 @@ async function handleIssueWorkflow(
 
 async function handleError(err: unknown): Promise<void> {
   const msg = err instanceof Error ? err.message : String(err);
-  core.error(msg);
   const runUrl = buildRunUrl();
   const issueNumber = github.context.payload.issue?.number;
 
@@ -158,7 +157,7 @@ async function handleError(err: unknown): Promise<void> {
       `❌ pi agent error:\n\n\`\`\`\n${msg}\n\`\`\`\n\n[View run](${runUrl})`
     );
   } else {
-    core.error(`[View run](${runUrl})`);
+    core.info(`[View run](${runUrl})`);
   }
   core.setFailed(msg);
 }
