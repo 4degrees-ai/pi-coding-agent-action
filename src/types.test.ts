@@ -404,7 +404,7 @@ describe('types', () => {
         commits: { totalCount: 1 },
       };
 
-      expect(pr.baseRepository.nameWithOwner).toBe('owner/repo');
+      expect(pr.baseRepository?.nameWithOwner).toBe('owner/repo');
       expect(pr.headRepository.nameWithOwner).toBe('fork/repo');
     });
   });

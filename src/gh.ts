@@ -105,9 +105,15 @@ class GitHubClient {
       'view',
       `${prNumber}`,
       '--json',
-      'title,body,state,author,baseRefName,headRefName,headRepository,baseRepository,additions,deletions,commits,files,reviews,comments',
+      'title,body,state,author,baseRefName,headRefName,headRepository,additions,deletions,commits,files,reviews,comments',
     ]);
-    return this.parseJSONOutput<PRNode>(output, 'PR', prNumber);
+    const prData = this.parseJSONOutput<PRNode>(output, 'PR', prNumber);
+
+    // baseRepository is not available from gh CLI, so we populate it from context
+    const { owner, repo } = this.getRepoContext();
+    prData.baseRepository = { nameWithOwner: `${owner}/${repo}` };
+
+    return prData;
   }
 
   /**

@@ -84,18 +84,31 @@ async function handlePRWorkflow(
 
   if (await gitService.branchIsDirty()) {
     const summary = summarize(response, issueNumber);
+
+    // Create a new branch from the current state instead of pushing to the PR's head branch
+    // This is necessary because PRs are checked out in detached HEAD mode in GitHub Actions
+    const newBranch = `pi-pr-${issueNumber}-${Date.now()}`;
+    await gitService.checkoutBranch(newBranch);
+
     await gitService.commitAndPush(
       summary,
       {
         name: ACTOR,
         email: `${ACTOR}@users.noreply.github.com`,
       },
-      pr.headRefName
+      newBranch
     );
-  }
 
-  const finalBody = `${response}\n\n[View run](${runUrl})`;
-  await gh.createComment(issueNumber, finalBody);
+    const { owner, repo } = github.context.repo;
+    const serverUrl = github.context.serverUrl || 'https://github.com';
+    const branchUrl = `${serverUrl}/${owner}/${repo}/tree/${newBranch}`;
+
+    const finalBody = `${response}\n\n[View run](${runUrl})\n\n**Changes pushed to branch:** [${newBranch}](${branchUrl})`;
+    await gh.createComment(issueNumber, finalBody);
+  } else {
+    const finalBody = `${response}\n\n[View run](${runUrl})`;
+    await gh.createComment(issueNumber, finalBody);
+  }
 }
 
 /**

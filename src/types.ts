@@ -95,8 +95,8 @@ export interface PRNode {
   additions: number;
   /** Total number of lines deleted */
   deletions: number;
-  /** The base repository information */
-  baseRepository: { nameWithOwner: string };
+  /** The base repository information (populated from context, not available from gh CLI) */
+  baseRepository?: { nameWithOwner: string };
   /** The head repository information */
   headRepository: { nameWithOwner: string };
   /** Total number of commits in the PR */
