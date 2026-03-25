@@ -21,21 +21,31 @@ describe('GitHubClient', () => {
     });
 
     // Spy on getOctokit
-    getOctokitSpy = spyOn(github, 'getOctokit').mockReturnValue({
+    const createMockMethod = <T extends (...args: unknown[]) => unknown>(fn: T) => {
+      const mockFn = mock(fn);
+      return Object.assign(mockFn, {
+        defaults: mock(() => mockFn),
+        endpoint: mock(() => ({})),
+      });
+    };
+
+    const mockOctokit = {
       rest: {
         issues: {
-          createComment: mock(() => Promise.resolve({ data: {} })),
-          updateComment: mock(() => Promise.resolve({ data: {} })),
+          createComment: createMockMethod(() => Promise.resolve({ data: {} })),
+          updateComment: createMockMethod(() => Promise.resolve({ data: {} })),
         },
         reactions: {
-          createForIssueComment: mock(() => Promise.resolve({ data: { id: 123 } })),
-          deleteForIssueComment: mock(() => Promise.resolve({ data: {} })),
+          createForIssueComment: createMockMethod(() => Promise.resolve({ data: { id: 123 } })),
+          deleteForIssueComment: createMockMethod(() => Promise.resolve({ data: {} })),
         },
         pulls: {
-          create: mock(() => Promise.resolve({ data: { number: 42 } })),
+          create: createMockMethod(() => Promise.resolve({ data: { number: 42 } })),
         },
       },
-    });
+    } as unknown as ReturnType<typeof github.getOctokit>;
+
+    getOctokitSpy = spyOn(github, 'getOctokit').mockReturnValue(mockOctokit);
   });
 
   afterEach(() => {

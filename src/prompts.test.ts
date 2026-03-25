@@ -85,10 +85,7 @@ describe('prompts', () => {
     });
 
     it('should handle issue without comments', () => {
-      const issueWithoutComments: IssueNode = {
-        ...mockIssue,
-        comments: undefined,
-      };
+      const { comments: _comments, ...issueWithoutComments } = mockIssue;
       const prompt = buildIssuePrompt(issueWithoutComments, null, 123);
       expect(prompt).not.toContain('<issue_comments>');
     });
@@ -284,34 +281,32 @@ describe('prompts', () => {
     });
 
     it('should handle PR without comments', () => {
-      const prWithoutComments: PRNode = { ...mockPR, comments: undefined };
+      const { comments: _comments, ...prWithoutComments } = mockPR;
       const prompt = buildPRPrompt(prWithoutComments, null, 789);
       expect(prompt).not.toContain('<pull_request_comments>');
     });
 
     it('should handle PR without files', () => {
-      const prWithoutFiles: PRNode = { ...mockPR, files: undefined };
+      const { files: _files, ...prWithoutFiles } = mockPR;
       const prompt = buildPRPrompt(prWithoutFiles, null, 789);
       expect(prompt).not.toContain('<pull_request_changed_files>');
     });
 
     it('should handle PR without reviews', () => {
-      const prWithoutReviews: PRNode = { ...mockPR, reviews: undefined };
+      const { reviews: _reviews, ...prWithoutReviews } = mockPR;
       const prompt = buildPRPrompt(prWithoutReviews, null, 789);
       expect(prompt).not.toContain('<pull_request_reviews>');
     });
 
     it('should handle PR with review but no review comments', () => {
+      const { comments: _comments, ...reviewWithoutComments } = mockPR.reviews?.[0] ?? {
+        author: { login: 'reviewer1' },
+        body: 'Looks good!',
+        submittedAt: '2026-03-22T15:00:00Z',
+      };
       const prWithEmptyReviewComments: PRNode = {
         ...mockPR,
-        reviews: [
-          {
-            author: { login: 'reviewer1' },
-            body: 'Looks good!',
-            submittedAt: '2026-03-22T15:00:00Z',
-            comments: undefined,
-          },
-        ],
+        reviews: [reviewWithoutComments],
       };
       const prompt = buildPRPrompt(prWithEmptyReviewComments, null, 789);
       expect(prompt).toContain('- reviewer1 at 2026-03-22T15:00:00Z: Looks good!');
@@ -319,6 +314,11 @@ describe('prompts', () => {
     });
 
     it('should handle PR with review comments missing line number', () => {
+      const { line: _line, ...commentWithoutLine } = {
+        path: 'src/file1.ts',
+        line: undefined,
+        body: 'General comment',
+      };
       const prWithMissingLine: PRNode = {
         ...mockPR,
         reviews: [
@@ -326,13 +326,7 @@ describe('prompts', () => {
             author: { login: 'reviewer1' },
             body: 'Comment',
             submittedAt: '2026-03-22T15:00:00Z',
-            comments: [
-              {
-                path: 'src/file1.ts',
-                line: undefined,
-                body: 'General comment',
-              },
-            ],
+            comments: [commentWithoutLine],
           },
         ],
       };

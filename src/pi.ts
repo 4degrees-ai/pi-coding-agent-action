@@ -128,7 +128,8 @@ const GENERIC_PREFIX_PATTERN = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
  * @returns A short summary suitable for a git commit message
  */
 export function summarize(text: string, issueNumber: number): string {
-  const firstLine = text.split('\n')[0].trim();
+  const lines = text.split('\n');
+  const firstLine = lines[0]?.trim() ?? '';
 
   // Use first line if it's short enough and not generic
   if (firstLine.length > 0 && firstLine.length <= 50 && !GENERIC_PREFIX_PATTERN.test(firstLine)) {
@@ -136,8 +137,8 @@ export function summarize(text: string, issueNumber: number): string {
   }
 
   // For longer or generic first lines, use the first sentence or phrase
-  const firstSentence = text
-    .split(/[.!?\n]/)[0]
+  const sentences = text.split(/[.!?\n]/);
+  const firstSentence = (sentences[0] ?? '')
     .trim()
     .replace(GENERIC_PREFIX_PATTERN, '')
     .substring(0, 50)

@@ -120,7 +120,6 @@ describe('types', () => {
         state: 'OPEN',
         author: { login: 'user' },
         createdAt: '2026-03-22T12:00:00Z',
-        comments: undefined,
       };
 
       expect(issue.comments).toBeUndefined();
@@ -258,8 +257,8 @@ describe('types', () => {
 
       expect(pr.files).toBeDefined();
       expect(pr.files?.length).toBe(2);
-      expect(pr.files?.[0].path).toBe('src/file1.ts');
-      expect(pr.files?.[1].changeType).toBe('ADDED');
+      expect(pr.files?.[0]?.path).toBe('src/file1.ts');
+      expect(pr.files?.[1]?.changeType).toBe('ADDED');
     });
 
     it('should accept comments array', () => {
@@ -350,9 +349,9 @@ describe('types', () => {
         ],
       };
 
-      expect(pr.reviews?.[0].comments).toBeDefined();
-      expect(pr.reviews?.[0].comments?.[0].path).toBe('src/file.ts');
-      expect(pr.reviews?.[0].comments?.[0].line).toBe(10);
+      expect(pr.reviews?.[0]?.comments).toBeDefined();
+      expect(pr.reviews?.[0]?.comments?.[0]?.path).toBe('src/file.ts');
+      expect(pr.reviews?.[0]?.comments?.[0]?.line).toBe(10);
     });
 
     it('should handle different change types', () => {
@@ -383,7 +382,7 @@ describe('types', () => {
           ],
         };
 
-        expect(pr.files?.[0].changeType).toBe(changeType);
+        expect(pr.files?.[0]?.changeType).toBe(changeType);
       });
     });
 

@@ -16,6 +16,10 @@ export function runCommand(
   options?: { input?: string; timeout?: number; stdio?: 'pipe' | 'inherit' },
   env?: NodeJS.ProcessEnv
 ): string {
+  if (cmd.length === 0 || !cmd[0]) {
+    throw new Error('Command cannot be empty');
+  }
+
   const result = spawnSync(cmd[0], cmd.slice(1), {
     stdio: ['pipe', 'pipe', options?.stdio ?? 'pipe'],
     encoding: 'utf8',
