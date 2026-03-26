@@ -10,6 +10,9 @@ import {
   DEFAULT_PI_MODEL,
   PROMPT_TEMP_FILE,
   SYSTEM_PROMPT_TEMP_FILE_PREFIX,
+  GENERIC_PREFIX_PATTERN,
+  RECOMMENDED_COMMIT_SUBJECT_LENGTH,
+  MAX_COMMIT_SUBJECT_LENGTH,
 } from './constants.js';
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -104,20 +107,6 @@ export function runPi(prompt: string, overrideProvider?: string, overrideModel?:
 }
 
 // ── Constants ─────────────────────────────────────────────
-/**
- * Generic prefix patterns for commit message summarization.
- *
- * This regex matches common generic phrases that AI assistants often start
- * responses with, which make poor commit message subjects.
- *
- * Patterns:
- * - I, I'll: First-person statements (e.g., "I have fixed...")
- * - Sure, OK, Great: Affirmative responses (e.g., "Sure, I'll do that...")
- * - Here: Descriptive starts (e.g., "Here is the fix...")
- * - The, This: Definite articles as sentence starts (e.g., "The bug was...")
- * - A: Generic article (e.g., "A fix for...")
- */
-const GENERIC_PREFIX_PATTERN = /^(I|I'll|Sure|OK|Great|Here|The|This|A)/i;
 
 // ── Summarize ─────────────────────────────────────────────
 /**
@@ -132,7 +121,11 @@ export function summarize(text: string, issueNumber: number): string {
   const firstLine = lines[0]?.trim() ?? '';
 
   // Use first line if it's short enough and not generic
-  if (firstLine.length > 0 && firstLine.length <= 50 && !GENERIC_PREFIX_PATTERN.test(firstLine)) {
+  if (
+    firstLine.length > 0 &&
+    firstLine.length <= RECOMMENDED_COMMIT_SUBJECT_LENGTH &&
+    !GENERIC_PREFIX_PATTERN.test(firstLine)
+  ) {
     return firstLine;
   }
 
@@ -141,7 +134,7 @@ export function summarize(text: string, issueNumber: number): string {
   const firstSentence = (sentences[0] ?? '')
     .trim()
     .replace(GENERIC_PREFIX_PATTERN, '')
-    .substring(0, 50)
+    .substring(0, MAX_COMMIT_SUBJECT_LENGTH)
     .trim();
 
   return firstSentence.length > 5 ? firstSentence : `Fix issue #${issueNumber}`;

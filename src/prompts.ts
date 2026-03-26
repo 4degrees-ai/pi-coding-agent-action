@@ -1,4 +1,9 @@
 import type { IssueNode, PRNode } from './types.js';
+import {
+  ISSUE_COMMENT_INDENT,
+  PR_COMMENT_INDENT,
+  REVIEW_COMMENT_INDENT,
+} from './constants.js';
 
 // ── Constants ─────────────────────────────────────────────
 const INSTRUCTIONS_MESSAGE =
@@ -19,7 +24,7 @@ function formatField(value: string | undefined | null, fallback: string): string
  * Formats comments from an issue or PR, optionally filtering by comment ID.
  * @param comments - The array of comments to format
  * @param commentId - Optional comment ID to filter out
- * @param indent - The indentation string to use (default: '  - ')
+ * @param indent - The indentation string to use (default: ISSUE_COMMENT_INDENT)
  * @returns The formatted comments string
  */
 function formatComments(
@@ -30,7 +35,7 @@ function formatComments(
     body: string;
   }[],
   commentId: number | undefined,
-  indent = '  - '
+  indent = ISSUE_COMMENT_INDENT
 ): string {
   return comments
     .filter(c => commentId === undefined || c.databaseId !== commentId)
@@ -65,7 +70,7 @@ function formatReviews(
   return reviews
     .map(r => {
       const rc = (r.comments ?? [])
-        .map(c => `    - ${c.path ?? 'unknown'}:${c.line ?? '?'}: ${c.body}`)
+        .map(c => `${REVIEW_COMMENT_INDENT}${c.path ?? 'unknown'}:${c.line ?? '?'}: ${c.body}`)
         .join('\n');
       return `- ${r.author.login} at ${r.submittedAt}: ${r.body}${rc ? '\n' + rc : ''}`;
     })
@@ -88,6 +93,8 @@ export function buildIssuePrompt(
   const safeTitle = formatField(issue.title, '(no title)');
   const safeBody = formatField(issue.body, '(no body)');
   const comments = formatComments(issue.comments ?? [], commentId);
+
+  const comments = formatComments(issue.comments ?? [], commentId, ISSUE_COMMENT_INDENT);
 
   return [
     userPrompt ?? 'Summarize this issue and suggest next steps.',
@@ -123,7 +130,7 @@ export function buildPRPrompt(
 ): string {
   const safeTitle = formatField(pr.title, '(no title)');
   const safeBody = formatField(pr.body, '(no body)');
-  const comments = formatComments(pr.comments ?? [], commentId, '- ');
+  const comments = formatComments(pr.comments ?? [], commentId, PR_COMMENT_INDENT);
   const files = formatFiles(pr.files ?? []);
   const reviews = formatReviews(pr.reviews ?? []);
 
