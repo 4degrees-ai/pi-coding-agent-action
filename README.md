@@ -1,6 +1,6 @@
 # Pi Coding Agent Action
 
-[![Codecov](https://codecov.io/gh/shaftoe/pi-coding-agent-action/branch/v2/graph/badge.svg)](https://app.codecov.io/gh/shaftoe/pi-coding-agent-action/)
+[![Codecov](https://codecov.io/gh/shaftoe/pi-coding-agent-action/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/shaftoe/pi-coding-agent-action/)
 
 A CI/CD action that integrates [Pi coding agent](https://pi.dev) with git hosting platform workflows. Works with **GitHub**, **Codeberg**, and self-hosted **Forgejo** instances — any platform that provides GitHub-compatible APIs and CI/CD environment variables.
 
@@ -45,7 +45,7 @@ Refer to [the official Pi documentation](https://github.com/badlogic/pi-mono/tre
 > Depending on the permissions assigned to your workflow you should consider restricting who's allowed to trigger it e.g. filtering for GitHub user name or role (`if github.actor == '<my-user>'`).
 
 > [!IMPORTANT]
-> The default `v2` branch is in active development so if you don't want the bleeding edge you should pin to the latest release, e.g.
+> The `develop` and `v2` branches are in constant development so if you don't want the bleeding edge you should pin to the latest release, e.g.
 > ```yaml
 >    uses: shaftoe/pi-coding-agent-action@v2.15.5
 > ```
@@ -386,9 +386,20 @@ bun run test:e2e
 
 ### Releasing
 
-Automated release flow handled by `semantic-release` in [release.yml](./.github/workflows/release.yml)
+The project uses a `develop` → `v2` branching strategy:
 
-### Refereneces
+- **`develop`** is the default branch. All PRs target it. The `package.yml` workflow auto-commits `dist/` changes here.
+- **`v2`** is the release branch. Merges into `v2` trigger [release.yml](./.github/workflows/release.yml), which runs tests and `semantic-release`.
+
+To cut a release:
+
+```bash
+git switch v2
+git merge develop
+git push origin v2
+```
+
+### References
 
 - Events that trigger workflows: <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows>
 - Webhook schema source: <https://github.com/octokit/webhooks/tree/main/payload-schemas/api.github.com>
