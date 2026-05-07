@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-05-07
+
+### Added
+
+- add ignore to fetchPRDiff to exclude e.g. dist/ (#175)
+- update dependencies to use new @earendil-works namespace
+
 ## [2.15.5] - 2026-05-05
 
 ### Changed
@@ -315,7 +322,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.5...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.0...HEAD
+[2.16.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.5...v2.16.0
 [2.15.5]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.4...v2.15.5
 [2.15.4]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.3...v2.15.4
 [2.15.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.2...v2.15.3
