@@ -1,7 +1,7 @@
 /**
  * Tests for Agent class.
  *
- * Tests the Pi agent wrapper including session stats handling and session error detection.
+ * Tests the Pi agent wrapper including session stats handling.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -192,7 +192,6 @@ describe('Agent', () => {
         }),
         prompt: async () => {},
         subscribe: () => {},
-        state: { errorMessage: undefined },
       };
       agent['session'] = mockStats as any;
 
@@ -220,7 +219,6 @@ describe('Agent', () => {
         },
         prompt: async () => {},
         subscribe: () => {},
-        state: { errorMessage: undefined },
       };
       agent['session'] = mockSession as any;
 
@@ -243,7 +241,6 @@ describe('Agent', () => {
         }),
         prompt: async () => {},
         subscribe: () => {},
-        state: { errorMessage: undefined },
       };
       agent['session'] = mockStats as any;
 
@@ -272,7 +269,6 @@ describe('Agent', () => {
         }),
         prompt: async () => {},
         subscribe: () => {},
-        state: { errorMessage: undefined },
       };
       agent['session'] = mockStats as any;
 
@@ -284,143 +280,6 @@ describe('Agent', () => {
           outputTokens: 50000,
           totalTokens: 150000,
           cost: 1.2345,
-          version: expect.any(String),
-        },
-      });
-    });
-  });
-
-  describe('session error detection in run()', () => {
-    test('throws when sessionError is set from message_end event', async () => {
-      const agent = createRealAgent();
-      await agent.ready();
-
-      agent['sessionError'] = 'Provider finish_reason: model_context_window_exceeded';
-      agent['session'] = {
-        ...agent['session'],
-        prompt: async () => {},
-        state: { errorMessage: undefined },
-      } as any;
-
-      await expect(agent.run('Hello')).rejects.toThrow(
-        'Pi agent session error: Provider finish_reason: model_context_window_exceeded'
-      );
-    });
-
-    test('session.state.errorMessage alone does NOT cause failure (stale SDK state)', async () => {
-      // The SDK may leave state.errorMessage set after auto-recovery (e.g.
-      // context window exceeded → compaction → retry → success). Only the
-      // event-tracked sessionError should drive the failure decision.
-      const agent = createRealAgent();
-      await agent.ready();
-
-      agent['sessionError'] = undefined;
-      agent['session'] = {
-        ...agent['session'],
-        prompt: async () => {},
-        state: { errorMessage: 'API rate limit exceeded' },
-        getSessionStats: () => ({
-          tokens: { input: 100, output: 50, total: 150 },
-          cost: 0.001,
-        }),
-      } as any;
-
-      const result = await agent.run('Hello');
-      expect(result.sessionStats).toBeDefined();
-    });
-
-    test('sessionError from events takes precedence (even with stale state.errorMessage)', async () => {
-      const agent = createRealAgent();
-      await agent.ready();
-
-      agent['sessionError'] = 'Event-tracked error';
-      agent['session'] = {
-        ...agent['session'],
-        prompt: async () => {},
-        state: { errorMessage: 'State-level error' },
-      } as any;
-
-      await expect(agent.run('Hello')).rejects.toThrow(
-        'Pi agent session error: Event-tracked error'
-      );
-    });
-
-    test('succeeds when no session error is present', async () => {
-      const agent = createRealAgent();
-      await agent.ready();
-
-      agent['sessionError'] = undefined;
-      agent['session'] = {
-        ...agent['session'],
-        prompt: async () => {},
-        state: { errorMessage: undefined },
-        getSessionStats: () => ({
-          tokens: { input: 100, output: 50, total: 150 },
-          cost: 0.001,
-        }),
-      } as any;
-
-      const result = await agent.run('Hello');
-      expect(result).toEqual({
-        result: '',
-        sessionStats: {
-          inputTokens: 100,
-          outputTokens: 50,
-          totalTokens: 150,
-          cost: 0.001,
-          version: expect.any(String),
-        },
-      });
-    });
-
-    test('compaction_end error is thrown', async () => {
-      const agent = createRealAgent();
-      await agent.ready();
-
-      agent['sessionError'] =
-        'Context overflow recovery failed after one compact-and-retry attempt.';
-
-      agent['session'] = {
-        ...agent['session'],
-        prompt: async () => {},
-        state: { errorMessage: undefined },
-      } as any;
-
-      await expect(agent.run('Hello')).rejects.toThrow(
-        'Pi agent session error: Context overflow recovery failed'
-      );
-    });
-
-    test('recovered transient error (stale state.errorMessage) does not cause false failure', async () => {
-      const agent = createRealAgent();
-      await agent.ready();
-
-      // Simulate the exact scenario from the bug report:
-      // - SDK hit model_context_window_exceeded mid-session
-      // - SDK auto-recovered via compaction + retry
-      // - Successful message_end cleared sessionError
-      // - But session.state.errorMessage still holds the stale error
-      agent['sessionError'] = undefined;
-      agent['session'] = {
-        ...agent['session'],
-        prompt: async () => {},
-        state: {
-          errorMessage: 'Provider finish_reason: model_context_window_exceeded',
-        },
-        getSessionStats: () => ({
-          tokens: { input: 100, output: 50, total: 150 },
-          cost: 0.001,
-        }),
-      } as any;
-
-      const result = await agent.run('Hello');
-      expect(result).toEqual({
-        result: '',
-        sessionStats: {
-          inputTokens: 100,
-          outputTokens: 50,
-          totalTokens: 150,
-          cost: 0.001,
           version: expect.any(String),
         },
       });
