@@ -1,25 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: 'bun'
+  - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
       interval: 'weekly'
-    open-pull-requests-limit: 10
-    groups:
-      production-dependencies:
-        patterns:
-          - '@actions/*'
-          - '@js-temporal/*'
-          - '@earendil-works/*'
-          - 'typebox'
-          - 'ignore'
-      development-dependencies:
-        patterns:
-          - '@types/*'
-          - 'bun-types'
-          - 'eslint'
-          - 'eslint-*'
-          - 'prettier'
-          - 'typescript'
-          - 'esbuild'
-          - 'isomorphic-git'
