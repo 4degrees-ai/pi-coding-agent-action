@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.1] - 2026-05-17
+
+### Changed
+
+- **deps**: update dependencies (#182)
+- **deps**: update dependencies (#184)
+- **deps**: update dependencies (#186)
+- **deps**: update dependencies (#187)
+- **deps**: update dependencies (#190)
+
+### Fixed
+
+- ensure final comment is always sent after Pi session completes (#192)
+- revert message_end/compaction_end error handling
+
 ## [2.16.0] - 2026-05-07
 
 ### Added
@@ -322,7 +337,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.1...HEAD
+[2.16.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.0...v2.16.1
 [2.16.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.5...v2.16.0
 [2.15.5]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.4...v2.15.5
 [2.15.4]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.3...v2.15.4
