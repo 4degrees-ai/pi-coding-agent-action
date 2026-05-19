@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-05-19
+
+### Added
+
+- add create_pull_request_review tool for inline diff-anchored review comments (#189)
+- ensure get_pr_diff does not overflow context window (#195)
+
+### Changed
+
+- **deps**: update dependencies (#196)
+- **deps**: update dependencies (#197)
+
 ## [2.16.1] - 2026-05-17
 
 ### Changed
@@ -337,7 +349,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.1...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.0...HEAD
+[2.17.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.1...v2.17.0
 [2.16.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.0...v2.16.1
 [2.16.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.5...v2.16.0
 [2.15.5]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.15.4...v2.15.5

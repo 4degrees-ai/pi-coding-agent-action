@@ -47,7 +47,7 @@ Refer to [the official Pi documentation](https://github.com/badlogic/pi-mono/tre
 > [!IMPORTANT]
 > The `develop` and `v2` branches are in constant development so if you don't want the bleeding edge you should pin to the latest release, e.g.
 > ```yaml
->    uses: shaftoe/pi-coding-agent-action@v2.16.1
+>    uses: shaftoe/pi-coding-agent-action@v2.17.0
 > ```
 
 ## Usage
