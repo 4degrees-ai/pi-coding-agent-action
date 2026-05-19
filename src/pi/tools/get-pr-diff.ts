@@ -17,6 +17,7 @@ import {
 import { CANCELLATION_MESSAGE_GET_PR_DIFF } from './constants';
 import { withCancellation } from './tool-execution';
 import type { PlatformProvider } from '../../platform';
+import type { DiffConfig } from '../../types';
 
 /**
  * Schema for the get_pr_diff tool.
@@ -60,6 +61,7 @@ interface GetPRDiffDetails {
   pull_number: number;
   lines: number;
   truncated: boolean;
+  truncated_reason?: 'bytes' | 'lines';
   ignored_files?: string[];
   cancelled?: boolean;
 }
@@ -88,9 +90,10 @@ function resolvePRParams(
  * Create the get_pr_diff tool definition bound to a platform provider.
  *
  * @param provider - The platform provider for PR diff operations.
+ * @param diffConfig - Optional diff configuration (max lines, max bytes, default ignore patterns).
  * @returns The tool definition.
  */
-export function getPRDiffToolFactory(provider: PlatformProvider) {
+export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffConfig) {
   return defineTool({
     name: 'get_pr_diff',
     label: 'Get PR Diff',
@@ -126,16 +129,25 @@ export function getPRDiffToolFactory(provider: PlatformProvider) {
         }
 
         const { owner, repo, pullNumber } = resolved;
-        const ignoreFiles = params.ignore_files;
 
-        const diff = await provider.getPRDiff(owner, repo, pullNumber, ignoreFiles);
+        // Merge default ignore patterns with caller-provided ones
+        const defaultIgnore = config?.diffIgnorePatterns ?? [];
+        const callerIgnore = params.ignore_files ?? [];
+        const ignoreFiles = [...new Set([...defaultIgnore, ...callerIgnore])];
+
+        const diff = await provider.getPRDiff(
+          owner,
+          repo,
+          pullNumber,
+          ignoreFiles.length > 0 ? ignoreFiles : undefined
+        );
 
         if (!diff) {
           return {
             content: [
               {
                 type: 'text' as const,
-                text: `No diff available for PR #${pullNumber}. This may not be a pull request, or the diff could not be fetched.`,
+                text: `No diff available for PR #${pullNumber}. This may not be a pull request, or the diff is empty.`,
               },
             ],
             details: {
@@ -146,24 +158,58 @@ export function getPRDiffToolFactory(provider: PlatformProvider) {
           };
         }
 
-        const lines = diff.split('\n').length;
-        const maxLines = params.max_lines;
+        const maxLines = params.max_lines ?? config?.diffMaxLines ?? 1000;
+        const maxBytes = config?.diffMaxBytes ?? 102_400;
         let finalDiff = diff;
         let truncated = false;
+        let truncatedReason: 'bytes' | 'lines' | undefined;
 
-        if (maxLines && lines > maxLines) {
-          finalDiff =
-            diff.split('\n').slice(0, maxLines).join('\n') +
-            `\n... (truncated at ${maxLines} lines, ${lines - maxLines} more)`;
+        // Truncate by bytes first (catches minified single-line blobs)
+        if (Buffer.byteLength(finalDiff, 'utf8') > maxBytes) {
+          // Reserve space for the truncation marker to stay within maxBytes
+          const marker = `\n... (truncated at ${maxBytes} bytes)`;
+          const markerBytes = Buffer.byteLength(marker, 'utf8');
+          const budget = maxBytes - markerBytes;
+          // Slice at a byte boundary that won't split a multi-byte character
+          const buf = Buffer.from(finalDiff, 'utf8');
+          let cutAt = Math.min(budget, buf.length);
+          // Walk back to a safe UTF-8 boundary (never split a continuation byte)
+          while (cutAt > 0 && ((buf[cutAt] ?? 0) & 0xc0) === 0x80) {
+            cutAt--;
+          }
+          let sliced = buf.subarray(0, cutAt).toString('utf8');
+          // Snap to the last newline so we don't cut mid-line
+          const lastNewline = sliced.lastIndexOf('\n');
+          if (lastNewline > 0) {
+            sliced = sliced.slice(0, lastNewline);
+          }
+          finalDiff = sliced + marker;
           truncated = true;
+          truncatedReason = 'bytes';
         }
 
+        // Then truncate by lines (skip if byte truncation already occurred,
+        // since the byte limit is the tighter constraint and already snapped
+        // to a newline boundary)
+        if (!truncatedReason) {
+          const currentLines = finalDiff.split('\n').length;
+          if (currentLines > maxLines) {
+            finalDiff =
+              finalDiff.split('\n').slice(0, maxLines).join('\n') +
+              `\n... (truncated at ${maxLines} lines, ${currentLines - maxLines} more)`;
+            truncated = true;
+            truncatedReason = 'lines';
+          }
+        }
+
+        const finalLineCount = finalDiff.split('\n').length;
         const details: GetPRDiffDetails = {
           pull_number: pullNumber,
-          lines: Math.min(lines, maxLines ?? lines),
+          lines: finalLineCount,
           truncated,
+          ...(truncatedReason ? { truncated_reason: truncatedReason } : {}),
         };
-        if (ignoreFiles && ignoreFiles.length > 0) {
+        if (ignoreFiles.length > 0) {
           details.ignored_files = ignoreFiles;
         }
 

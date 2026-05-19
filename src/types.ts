@@ -97,9 +97,18 @@ export type PiAgentFactory = (
 ) => PiAgent;
 
 /**
+ * Subset of configuration used by the PR-diff tool.
+ */
+export interface DiffConfig {
+  diffMaxLines?: number;
+  diffMaxBytes?: number;
+  diffIgnorePatterns?: string[];
+}
+
+/**
  * Configuration for the Pi agent.
  */
-export interface PiConfig {
+export interface PiConfig extends DiffConfig {
   provider: string;
   model: string;
   token: string;

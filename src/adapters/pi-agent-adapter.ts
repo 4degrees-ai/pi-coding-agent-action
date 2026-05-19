@@ -16,17 +16,7 @@ export const createRealPiAgent: PiAgentFactory = (
   core: CoreAdapter,
   provider: PlatformProvider
 ): PiAgent => {
-  const agent = new Agent(
-    config.model,
-    config.provider,
-    config.token,
-    config.thinkingLevel,
-    core,
-    provider,
-    config.extensions,
-    config.loadBuiltinExtensions,
-    config.baseUrl
-  );
+  const agent = new Agent(core, provider, config);
 
   return {
     async run(text: string) {
