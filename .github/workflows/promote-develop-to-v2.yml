@@ -66,3 +66,15 @@ jobs:
         if: inputs.dry_run != 'true'
         run: |
           git push origin v2
+
+      - name: Trigger release workflow
+        if: inputs.dry_run != 'true'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release.yml',
+              ref: 'v2',
+            })
