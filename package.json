@@ -1,6 +1,6 @@
 {
   "name": "pi-coding-agent-action",
-  "version": "2.17.0",
+  "version": "2.17.1",
   "description": "CI/CD Action to integrate Pi coding agent in workflows",
   "main": "dist/index.js",
   "scripts": {
