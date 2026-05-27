@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-05-27
+
+### Added
+
+- add customizable branch naming with branch_name_template input (#207)
+- append Co-authored-by trailer to commit messages (#206)
+
+### Changed
+
+- **deps**: update dependencies (#212)
+- **deps**: update dependencies (#213)
+
+### Fixed
+
+- add git ref validation and fix truncation test for branch naming (#211)
+
 ## [2.17.1] - 2026-05-24
 
 ### Changed
@@ -356,7 +372,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.1...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.18.0...HEAD
+[2.18.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.1...v2.18.0
 [2.17.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.0...v2.17.1
 [2.17.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.1...v2.17.0
 [2.16.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.0...v2.16.1
