@@ -1,55 +1,5 @@
 # AGENTS.md
 
-## Project Overview
-
-This is a CI/CD action that integrates the [Pi coding agent](https://pi.dev) with git hosting platform workflows. Users can invoke the agent by commenting `/pi` in issues or pull requests to get AI assistance with code analysis, fixes, and reviews.
-
-**Key Features:**
-
-- Issue assistance: Analyze issues and create fixes
-- PR assistance: Review and improve pull requests
-- Automated commits: Make changes, commit them, and create PRs
-- Flexible LLM support: Works with various providers (Anthropic, OpenAI, Google, etc.)
-- Multi-platform: Supports GitHub, Codeberg, and self-hosted Forgejo instances
-
-## Codebase Structure
-
-- `src/` - TypeScript action source code
-  - `run.ts` - Main entry point for the action (simplified orchestrator creation)
-  - `orchestrator.ts` - Business logic orchestration with testable adapter pattern
-  - `types.ts` - Shared type definitions and adapter interfaces
-  - `git/` - Platform-agnostic git utilities (shared across all platforms)
-    - `types.ts` - Shared git types (`FileMode`, `TreeEntry`, `Logger`)
-    - `constants.ts` - Shared git constants (`FILE_MODE_*`, `DEFAULT_IGNORE_PATTERNS`)
-    - `file-scanner.ts` - File change scanning (directory walking, gitignore, comparison)
-    - `index.ts` - Barrel exports
-  - `platform/` - Platform abstraction for multi-platform support
-    - `types.ts` - Platform provider interface (`PlatformProvider`, `PlatformContext`)
-    - `index.ts` - Barrel exports
-    - `github/` - GitHub/Codeberg/Forgejo implementation
-      - `index.ts` - Module barrel (context management + re-exports)
-      - `provider.ts` - Platform provider implementation (`detectPlatform`, `createGitHubPlatformProvider`)
-      - `comments.ts` - Comment creation utilities
-      - `context.ts` - GitHub context extraction and issue/PR thread retrieval
-      - `context-utils.ts` - Shared context utility functions
-      - `constants.ts` - GitHub-specific constants
-      - `octokit.ts` - Shared Octokit client singleton
-      - `reactions.ts` - Reaction management (add/remove)
-      - `pull-request.ts` - Pull request creation tool implementation
-      - `pull-request-update.ts` - Pull request update tool implementation
-      - `git/` - Git Data API operations (blobs, trees, commits, file map building)
-  - `adapters/` - Production implementations of adapter interfaces
-    - `core-adapter.ts` - CI/CD Core operations
-    - `git-adapter.ts` - Git hosting platform API operations
-    - `pi-agent-adapter.ts` - Pi agent factory
-  - `pi/` - Pi agent library and tool definitions
-- `tests/` - Bun test files (following Bun convention)
-  - `*.spec.ts` - Test files named with `.spec.ts` extension
-  - `git/` - Tests for platform-agnostic git utilities
-  - `platform/` - Tests for platform abstraction and GitHub module
-  - `pi/` - Tests for Pi agent integration
-- `scripts/` - Utilities, helpers, etc.
-
 ## Architecture Overview
 
 The action uses a **testable adapter pattern** to separate business logic from external dependencies:
