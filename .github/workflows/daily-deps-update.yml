@@ -1,14 +1,14 @@
 name: Daily Dependency Update
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Runs daily at 06:00 UTC and can also be triggered manually.
+# Runs daily at 03:00 UTC and can also be triggered manually.
 # Calls the reusable update-bun-deps workflow to bump packages and open a PR,
 # then uses the Pi coding agent to review the PR for breaking changes.
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
   schedule:
-    - cron: "0 6 * * *" # every day at 06:00 UTC
+    - cron: "0 3 * * *" # every day at 06:00 UTC
   workflow_dispatch:
 
 # NOTE: We use PAT_TOKEN instead of GITHUB_TOKEN so that the PR created by
