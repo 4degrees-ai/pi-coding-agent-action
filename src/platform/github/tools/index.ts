@@ -3,7 +3,8 @@
  *
  * Re-exports the platform-specific implementations that back the Pi agent
  * custom tools (`create_pull_request`, `update_pull_request`,
- * `get_issue_or_pr_thread`, `get_pr_diff`, `create_pull_request_review`).
+ * `get_issue_or_pr_thread`, `get_pr_diff`, `create_pull_request_review`,
+ * `get_ci_status`, `get_workflow_run_logs`).
  */
 
 // Pull request creation
@@ -40,3 +41,23 @@ export {
   type CreateReviewDetails,
   type ReviewInlineComment,
 } from './review';
+
+// CI/CD status
+export {
+  getCIStatus,
+  type GetCIStatusParams,
+  type GetCIStatusDetails,
+  type CheckRunResult,
+  type WorkflowRunResult,
+} from './get-ci-status';
+
+// Workflow run logs
+export {
+  getWorkflowRunLogs,
+  type GetWorkflowRunLogsParams,
+  type GetWorkflowRunLogsDetails,
+  type JobLog,
+} from './get-workflow-run-logs';
+
+// Shared CI utilities
+export { getStatusIcon } from './ci-utils';

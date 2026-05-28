@@ -188,5 +188,22 @@ export {
 export { getIssueOrPRThread } from './tools/thread';
 export { fetchPRDiff } from './tools/pr-diff';
 
+// CI/CD status
+export {
+  getCIStatus,
+  type GetCIStatusParams,
+  type GetCIStatusDetails,
+  type CheckRunResult,
+  type WorkflowRunResult,
+} from './tools/get-ci-status';
+
+// Workflow run logs
+export {
+  getWorkflowRunLogs,
+  type GetWorkflowRunLogsParams,
+  type GetWorkflowRunLogsDetails,
+  type JobLog,
+} from './tools/get-workflow-run-logs';
+
 // Platform provider (used by platform/index.ts)
 export { detectPlatform, createGitHubPlatformProvider } from './provider';

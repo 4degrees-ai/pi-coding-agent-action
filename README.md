@@ -327,7 +327,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `export_session_html` | Export the session as a self-contained HTML file | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access | Yes | - |
-| `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `create_pull_request_review`, `update_pull_request`, `get_issue_or_pr_thread`, `get_pr_diff`) | No | `true` |
+| `load_builtin_extensions` | Whether to load built-in GitHub extensions (`create_pull_request`, `create_pull_request_review`, `update_pull_request`, `get_issue_or_pr_thread`, `get_pr_diff`, `get_ci_status`, `get_workflow_run_logs`) | No | `true` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
@@ -356,14 +356,16 @@ The action exposes the following outputs, which can be consumed by downstream st
 
 ## Custom Tools
 
-The action extends Pi with five custom tools:
+The action extends Pi with seven custom tools to interact more efficiently with GitHub APIs:
 
 | Tool | Description |
 |------|-------------|
-| `create_pull_request` | Creates a new pull request by detecting file changes, creating a branch, committing changes via GitHub API, and opening the PR. Supports `dry_run` mode for testing without actual PR creation. |
 | `create_pull_request_review` | Creates a pull request review with inline comments anchored to specific lines of the diff. Posts a GitHub Pull Request Review using the `pulls.createReview` API with comments positioned on specific file paths and line numbers. Supports multi-line comments, diff side selection (LEFT/RIGHT), and review events (COMMENT, APPROVE, REQUEST_CHANGES). |
+| `create_pull_request` | Creates a new pull request by detecting file changes, creating a branch, committing changes via GitHub API, and opening the PR. Supports `dry_run` mode for testing without actual PR creation. |
+| `get_ci_status` | Checks the CI/CD status for a pull request or commit ref. Returns both check runs and workflow runs with their statuses, conclusions, and URLs. Accepts optional `pull_number`, `ref`, `status`, and `conclusion` filters. For failed workflow runs, use the returned `run_id` with `get_workflow_run_logs` to fetch detailed job logs. |
 | `get_issue_or_pr_thread` | Retrieves the full thread of an issue or pull request including title, body, state, labels, branch info (for PRs), all comments, and review comments (inline comments on specific lines of the diff) for PRs. Useful for understanding the full context before making changes. |
 | `get_pr_diff` | Fetches the diff of a pull request on demand. Useful when the agent needs to understand what changed in a PR, e.g. for code reviews or addressing review feedback. Supports configurable `max_lines` truncation (default: 1000), max byte size cap (default: 100KB), and ignore patterns to filter out noisy paths. |
+| `get_workflow_run_logs` | Fetches job logs for a specific GitHub Actions workflow run to diagnose CI failures. Lists all jobs for a run and downloads their logs, truncated to 50KB by default (configurable via `max_bytes`). |
 | `update_pull_request` | Updates an existing pull request by pushing new commits to the PR branch and optionally updating the title and/or description. Supports `dry_run` mode for testing without actual modifications. |
 
 > [!TIP]
