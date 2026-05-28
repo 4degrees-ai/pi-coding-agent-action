@@ -19,7 +19,7 @@ import { SYSTEM_PROMPT } from './prompt';
 import { createLoggingFactory } from './logging';
 import type { ExtensionLoadingInfo } from './logging';
 import { createToolsFactory } from './tools/index';
-import type { CoreAdapter, DiffConfig } from '../types';
+import type { CoreAdapter, ResourceLoaderConfig } from '../types';
 import type { PlatformProvider } from '../platform';
 
 /**
@@ -77,27 +77,85 @@ export async function resolveExtensions(extensions?: string[]): Promise<Extensio
 }
 
 /**
+ * Create an extension factory that filters the active tool set based on
+ * `loadedTools`.
+ *
+ * When `loadedTools` is `undefined`, no filtering is performed.
+ * Otherwise the list is validated against the tools that are actually available
+ * after all extensions have been loaded. Unknown tool names cause an early
+ * error that fails the run.
+ *
+ * @param opts  - Options containing the `loadedTools` setting.
+ * @param core  - CoreAdapter for logging.
+ * @returns An extension factory that registers a `session_start` handler.
+ */
+export function createToolFilterFactory(opts: { loadedTools?: string[] }, core: CoreAdapter) {
+  return (pi: import('@earendil-works/pi-coding-agent').ExtensionAPI): void => {
+    const loadedTools = opts.loadedTools;
+
+    // No filtering needed when all tools should be loaded
+    if (!loadedTools) {
+      return;
+    }
+
+    pi.on('session_start', () => {
+      const availableTools = pi.getAllTools().map(t => t.name);
+      const availableSet = new Set(availableTools);
+
+      // Find unknown tool names
+      const unknown = loadedTools.filter(name => !availableSet.has(name));
+
+      if (unknown.length > 0) {
+        const message =
+          `loaded_tools: unknown tool name(s): ${unknown.join(', ')}. ` +
+          `Available tools: ${availableTools.sort().join(', ')}`;
+        core.info(`[loaded_tools] ❌ ${message}`);
+        core.setFailed(new Error(message));
+        throw new Error(message);
+      }
+
+      // Log the filtering
+      const removed = availableTools.filter(name => !loadedTools.includes(name));
+      if (removed.length > 0) {
+        core.info(
+          `[loaded_tools] Keeping ${loadedTools.length} tool(s): ${loadedTools.join(', ')}\n` +
+            `[loaded_tools] Removing ${removed.length} tool(s): ${removed.sort().join(', ')}`
+        );
+      }
+
+      pi.setActiveTools(loadedTools);
+    });
+  };
+}
+
+/**
  * Create and configure the resource loader used by the agent session.
  *
- * @param core - The CoreAdapter to use for logging within the Pi agent.
+ * @param core     - The CoreAdapter to use for logging within the Pi agent.
  * @param provider - The platform provider for custom tool operations.
- * @param extensions - Optional array of extension sources (npm packages, git repos, or local paths).
- * @param loadBuiltinExtensions - Whether to load built-in GitHub extensions (default true).
+ * @param config   - Optional resource loader config (extensions, builtin toggle,
+ *                   loadedTools filter, diff limits).
  * @returns A fully loaded {@link DefaultResourceLoader} instance.
  */
 export async function getResourceLoader(
   core: CoreAdapter,
   provider: PlatformProvider,
-  extensions?: string[],
-  loadBuiltinExtensions = true,
-  config?: DiffConfig
+  config?: ResourceLoaderConfig
 ): Promise<DefaultResourceLoader> {
+  const extensions = config?.extensions;
+  const loadBuiltinExtensions = config?.loadBuiltinExtensions ?? true;
+
   const { paths: additionalExtensionPaths, info: extensionInfo } =
     await resolveExtensions(extensions);
 
   const extensionFactories = [createLoggingFactory(core, extensionInfo)];
   if (loadBuiltinExtensions) {
     extensionFactories.unshift(createToolsFactory(provider, config));
+  }
+
+  // Add tool filter when loadedTools is configured
+  if (config?.loadedTools) {
+    extensionFactories.push(createToolFilterFactory(config, core));
   }
 
   const loader = new DefaultResourceLoader({

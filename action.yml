@@ -41,9 +41,14 @@ inputs:
     default: ''
 
   load_builtin_extensions:
-    description: 'Whether to load built-in GitHub extensions (create_pull_request, update_pull_request, get_issue_or_pr_thread)'
+    description: 'Whether to load built-in GitHub extensions (see Custom Tools section in README for the full list)'
     required: false
     default: 'true'
+
+  loaded_tools:
+    description: "Controls which tools are loaded into the session. Defaults to 'all' which loads all available tools (built-in + custom). Accepts a comma-separated list of tool names to load only those tools. Tool names must match exactly — unknown names cause the run to fail early."
+    required: false
+    default: 'all'
 
   diff_max_lines:
     description: 'Maximum number of diff lines returned by the get_pr_diff tool. Defaults to 1000.'
