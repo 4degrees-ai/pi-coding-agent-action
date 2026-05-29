@@ -91,14 +91,49 @@ export class Agent {
    */
   async ready(): Promise<Agent> {
     const loaderConfig: ResourceLoaderConfig = this.config;
+    const resourceLoader = await getResourceLoader(this.core, this.platformProvider, loaderConfig);
+
+    // Extract loadedTools early so we can pass it to createAgentSession and
+    // reuse it for post-creation validation without repeated non-null assertions.
+    const loadedTools = this.config.loadedTools;
+
     const { session } = await createAgentSession({
       model: this.model,
       thinkingLevel: this.thinkingLevel,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
-      resourceLoader: await getResourceLoader(this.core, this.platformProvider, loaderConfig),
+      resourceLoader,
+      // Pass loadedTools as the SDK's native allowlist (tools option).
+      // Unknown tool names are silently ignored by the SDK, so we validate
+      // after session creation below.
+      ...(loadedTools ? { tools: loadedTools } : {}),
     });
     this.session = session;
+
+    // Validate that all requested tool names actually exist after extensions
+    // are loaded. This provides early, actionable errors instead of silently
+    // dropping unknown names.
+    if (loadedTools) {
+      const availableTools = session.getAllTools().map(t => t.name);
+      const availableSet = new Set(availableTools);
+      const unknown = loadedTools.filter(name => !availableSet.has(name));
+
+      if (unknown.length > 0) {
+        const message =
+          `loaded_tools: unknown tool name(s): ${unknown.join(', ')}. ` +
+          `Available tools: ${availableTools.sort().join(', ')}`;
+        this.core.info(`[loaded_tools] ❌ ${message}`);
+        throw new Error(message);
+      }
+
+      const removed = availableTools.filter(name => !loadedTools.includes(name));
+      if (removed.length > 0) {
+        this.core.info(
+          `[loaded_tools] Keeping ${loadedTools.length} tool(s): ${loadedTools.join(', ')}\n` +
+            `[loaded_tools] Removing ${removed.length} tool(s): ${removed.sort().join(', ')}`
+        );
+      }
+    }
 
     this.session.subscribe(event => {
       if (event.type !== 'message_update') {
