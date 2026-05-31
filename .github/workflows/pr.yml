@@ -42,6 +42,8 @@ jobs:
           prompt: |
             This is a GitHub PR (#${{ github.event.pull_request.number }}) that needs code review. Focus on identifying issues, bugs, security concerns, and improvements. Don't apply any changes yourself, just review and suggest improvements.
 
+            Before reviewing, use get_issue_or_pr_thread to fetch any existing review comments so you don't duplicate feedback that has already been given.
+
             If the change involves upgrading dependencies, with special focus on @earendil-works/pi-coding-agent, ensure the version is up-to-date and no breaking changes are introduced. If the change is a new feature, evaluate if it's interesting or useful and suggest a possible implementation to make use of it.
 
             Once you're done, add your findings as comment to the PR.
