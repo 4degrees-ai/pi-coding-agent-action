@@ -167,9 +167,10 @@ describe('updatePullRequest - integration tests', () => {
     mockContext.eventName = 'pull_request';
     mockContext.payload = {};
 
-    // Initialize the github module context with test adapter
+    // Reset module context fully to clear any leaked platform context
+    // from other test files (e.g. provider.spec.ts sets issue.number=123)
     const githubExports = await githubModulePromise;
-    githubExports.setCoreAdapter(testCoreAdapter);
+    githubExports.resetModuleContext(testCoreAdapter);
   });
 
   test('updates PR title successfully', async () => {
