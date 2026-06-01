@@ -29,12 +29,12 @@ export async function run() {
   const coreAdapter = new RealCoreAdapter();
   const config = gatherActionsConfig();
   const outputSink = new ActionsOutputSink();
-  const gitAdapter = new RealGitAdapter(coreAdapter);
 
   // Create Octokit from the github_token input
   const octokit = github.getOctokit(coreAdapter.getInput('github_token'));
 
   // Build PlatformContext from the @actions/github singleton
+  const githubCtx = github.context as { actor?: string; sha?: string };
   const platformContext = {
     repo: github.context.repo,
     issue: github.context.issue,
@@ -43,9 +43,21 @@ export async function run() {
     serverUrl: github.context.serverUrl || 'https://github.com',
     runId: github.context.runId,
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
+    ...(githubCtx.actor !== undefined ? { actor: githubCtx.actor } : {}),
+    ...(githubCtx.sha !== undefined ? { sha: githubCtx.sha } : {}),
   };
 
-  const platformProvider = createGitHubPlatformProvider({ octokit, context: platformContext });
+  // Create the platform provider with explicit deps (no singletons)
+  const triggerValue = coreAdapter.getInput('trigger');
+  const platformProvider = createGitHubPlatformProvider({
+    octokit,
+    context: platformContext,
+    logger: coreAdapter,
+    ...(triggerValue ? { trigger: triggerValue } : {}),
+  });
+
+  // Create the git adapter with explicit deps
+  const gitAdapter = new RealGitAdapter(coreAdapter, octokit, platformContext);
 
   const orchestrator = new ActionOrchestrator(
     config,

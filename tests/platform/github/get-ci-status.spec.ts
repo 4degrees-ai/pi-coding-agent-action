@@ -5,7 +5,7 @@
  * check run fetching, workflow run fetching, filtering, and summary formatting.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, expect, test, mock, beforeEach, beforeAll } from 'bun:test';
+import { describe, expect, test, mock, beforeEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -95,15 +95,37 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../../src/platform/github/octokit', () => ({
-  getOctokit: mock(() => mockOctokit),
-}));
+// octokit singleton mock no longer needed - deps pattern used instead
+
+import type { GitHubModuleDeps } from '../../../src/platform/github/types';
+
+function createTestDeps(payloadOverrides?: Record<string, unknown>, withSha = true): GitHubModuleDeps {
+  return {
+    octokit: mockOctokit as any,
+    context: {
+      repo: mockContext.repo,
+      issue: mockContext.issue,
+      eventName: 'pull_request',
+      ...(withSha ? { sha: 'context-sha-12345678' } : {}),
+      payload: { ...payloadOverrides },
+      serverUrl: mockContext.serverUrl,
+      runId: mockContext.runId,
+      workspace: '/tmp',
+    },
+    logger: {
+      debug: mockDebug,
+      info: noop,
+      warning: noop,
+      notice: noop,
+      error: noop,
+    },
+  };
+}
 
 // Lazy import after mocks are set up
 const getCIStatusModulePromise = import('../../../src/platform/github/tools/get-ci-status.js');
 
 let getCIStatus: any;
-let resetModuleContext: any;
 
 async function getModule() {
   if (!getCIStatus) {
@@ -113,15 +135,6 @@ async function getModule() {
   return getCIStatus;
 }
 
-beforeAll(async () => {
-  const indexMod = await import('../../../src/platform/github/index.js');
-  resetModuleContext = indexMod.resetModuleContext;
-  resetModuleContext({
-    debug: mockDebug,
-  } as any);
-  await getModule();
-});
-
 describe('getCIStatus - platform implementation', () => {
   beforeEach(() => {
     mockPullsGet.mockClear();
@@ -129,8 +142,7 @@ describe('getCIStatus - platform implementation', () => {
     mockListWorkflowRuns.mockClear();
     mockDebug.mockClear();
 
-    // Default: no context SHA
-    (mockContext as any).sha = 'context-sha-12345678';
+    // Default: context SHA provided via createTestDeps payload.after
 
     // Reset to default empty responses
     mockChecksListForRef.mockImplementation(() =>
@@ -146,7 +158,7 @@ describe('getCIStatus - platform implementation', () => {
   describe('ref resolution', () => {
     test('uses explicit ref when provided', async () => {
       const fn = await getModule();
-      const result = await fn({ ref: 'explicit-ref-abc' });
+      const result = await fn(createTestDeps(), { ref: 'explicit-ref-abc' });
 
       expect(mockPullsGet).not.toHaveBeenCalled();
       expect(result.details.ref).toBe('explicit-ref-abc');
@@ -154,7 +166,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('resolves head SHA from pull_number', async () => {
       const fn = await getModule();
-      const result = await fn({ pull_number: 99 });
+      const result = await fn(createTestDeps(), { pull_number: 99 });
 
       expect(mockPullsGet).toHaveBeenCalledWith({
         owner: 'test-owner',
@@ -166,7 +178,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('prefers explicit ref over pull_number', async () => {
       const fn = await getModule();
-      const result = await fn({ ref: 'explicit-ref', pull_number: 99 });
+      const result = await fn(createTestDeps(), { ref: 'explicit-ref', pull_number: 99 });
 
       expect(mockPullsGet).not.toHaveBeenCalled();
       expect(result.details.ref).toBe('explicit-ref');
@@ -174,7 +186,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('falls back to context SHA when no ref or pull_number', async () => {
       const fn = await getModule();
-      const result = await fn({});
+      const result = await fn(createTestDeps(), {});
 
       expect(mockPullsGet).not.toHaveBeenCalled();
       expect(result.details.ref).toBe('context-sha-12345678');
@@ -182,9 +194,8 @@ describe('getCIStatus - platform implementation', () => {
 
     test('returns error message when context SHA is empty', async () => {
       const fn = await getModule();
-      (mockContext as any).sha = '';
 
-      const result = await fn({});
+      const result = await fn(createTestDeps({}, false), {});
 
       expect(result.content[0].text).toContain('Could not resolve ref');
       expect(result.details.ref).toBe('');
@@ -194,7 +205,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('uses owner/repo from params when provided', async () => {
       const fn = await getModule();
-      await fn({ owner: 'custom-owner', repo: 'custom-repo', ref: 'abc' });
+      await fn(createTestDeps(), { owner: 'custom-owner', repo: 'custom-repo', ref: 'abc' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -206,7 +217,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('uses owner/repo from context when not provided', async () => {
       const fn = await getModule();
-      await fn({ ref: 'abc' });
+      await fn(createTestDeps(), { ref: 'abc' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -241,7 +252,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc12345' });
+      const result = await fn(createTestDeps(), { ref: 'abc12345' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -275,7 +286,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc' });
+      const result = await fn(createTestDeps(), { ref: 'abc' });
 
       expect(result.details.check_runs[0].conclusion).toBeNull();
       expect(result.details.check_runs[0].started_at).toBeNull();
@@ -283,7 +294,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('passes status filter to API', async () => {
       const fn = await getModule();
-      await fn({ ref: 'abc', status: 'completed' });
+      await fn(createTestDeps(), { ref: 'abc', status: 'completed' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -294,7 +305,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('passes filter: "all" when conclusion is provided', async () => {
       const fn = await getModule();
-      await fn({ ref: 'abc', conclusion: 'failure' });
+      await fn(createTestDeps(), { ref: 'abc', conclusion: 'failure' });
 
       expect(mockChecksListForRef).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -317,7 +328,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc', conclusion: 'failure' });
+      const result = await fn(createTestDeps(), { ref: 'abc', conclusion: 'failure' });
 
       expect(result.details.check_runs).toHaveLength(1);
       expect(result.details.check_runs[0].name).toBe('test');
@@ -344,7 +355,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc12345' });
+      const result = await fn(createTestDeps(), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain('https://details.example.com/1');
     });
@@ -377,7 +388,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc' });
+      const result = await fn(createTestDeps(), { ref: 'abc' });
 
       expect(mockListWorkflowRuns).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -392,7 +403,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('passes status filter to workflow runs API', async () => {
       const fn = await getModule();
-      await fn({ ref: 'abc', status: 'in_progress' });
+      await fn(createTestDeps(), { ref: 'abc', status: 'in_progress' });
 
       expect(mockListWorkflowRuns).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -415,7 +426,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc', conclusion: 'failure' });
+      const result = await fn(createTestDeps(), { ref: 'abc', conclusion: 'failure' });
 
       expect(result.details.workflow_runs).toHaveLength(1);
       expect(result.details.workflow_runs[0].name).toBe('Deploy');
@@ -445,7 +456,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc' });
+      const result = await fn(createTestDeps(), { ref: 'abc' });
 
       expect(result.details.workflow_runs[0].name).toBe('deploy.yml');
     });
@@ -474,7 +485,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc' });
+      const result = await fn(createTestDeps(), { ref: 'abc' });
 
       expect(result.details.workflow_runs[0].name).toBe('unknown');
       expect(result.details.workflow_runs[0].status).toBe('unknown');
@@ -506,7 +517,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc' });
+      const result = await fn(createTestDeps(), { ref: 'abc' });
 
       // Structured data should contain the full SHA
       expect(result.details.workflow_runs[0].head_sha).toBe('abcdef1234567890abcdef1234567890abcdef12');
@@ -536,7 +547,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc' });
+      const result = await fn(createTestDeps(), { ref: 'abc' });
 
       expect(result.details.workflow_runs[0].started_at).toBe('2024-02-01T00:00:00Z');
     });
@@ -548,7 +559,7 @@ describe('getCIStatus - platform implementation', () => {
     test('shows "No check runs" message when no results', async () => {
       const fn = await getModule();
       // Default mocks return empty arrays
-      const result = await fn({ ref: 'abc12345' });
+      const result = await fn(createTestDeps(), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain('No check runs or workflow runs found for this ref.');
     });
@@ -574,7 +585,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc12345' });
+      const result = await fn(createTestDeps(), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain('❌');
       expect(result.content[0].text).toContain('build: completed (failure)');
@@ -605,7 +616,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc12345' });
+      const result = await fn(createTestDeps(), { ref: 'abc12345' });
 
       expect(result.content[0].text).toContain('✅');
       expect(result.content[0].text).toContain('CI [push]');
@@ -614,7 +625,7 @@ describe('getCIStatus - platform implementation', () => {
 
     test('includes short SHA in header', async () => {
       const fn = await getModule();
-      const result = await fn({ ref: 'abcdef1234567890' });
+      const result = await fn(createTestDeps(), { ref: 'abcdef1234567890' });
 
       expect(result.content[0].text).toContain('CI Status for abcdef12');
     });
@@ -640,7 +651,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc' });
+      const result = await fn(createTestDeps(), { ref: 'abc' });
 
       // "in_progress" should not be followed by a conclusion in parentheses
       expect(result.content[0].text).toContain('running: in_progress');
@@ -693,7 +704,7 @@ describe('getCIStatus - platform implementation', () => {
         })
       );
 
-      const result = await fn({ ref: 'abc12345' });
+      const result = await fn(createTestDeps(), { ref: 'abc12345' });
 
       expect(result.details.check_runs).toHaveLength(1);
       expect(result.details.workflow_runs).toHaveLength(1);

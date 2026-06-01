@@ -12,7 +12,6 @@
  * - Anything else → throws an error (unsupported platform)
  */
 
-import * as github from '@actions/github';
 import { addReaction, deleteReaction } from './reactions';
 import { createFinalComment } from './comments';
 import { getPrompt, getStartTimeFromContext } from './context';
@@ -23,9 +22,10 @@ import { fetchPRDiff } from './tools/pr-diff';
 import { createReview } from './tools/review';
 import { getCIStatus } from './tools/get-ci-status';
 import { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
-import { setOctokit, setPlatformContext } from './index';
 import type { Temporal } from '@js-temporal/polyfill';
+import type { Logger } from '../../types';
 import type { PlatformProvider, PlatformType, PlatformContext } from '../types';
+import type { GitHubModuleDeps } from './types';
 import type { CommentMetadata } from '../../types';
 import type { CreateReactionType } from './reactions';
 import type { IssueOrPRThread, GetIssueOrPRThreadParams } from './types';
@@ -78,6 +78,13 @@ export interface GitHubPlatformDeps {
   octokit: ReturnType<typeof import('@actions/github').getOctokit>;
   /** Platform context extracted from the CI/CD environment or webhook. */
   context: PlatformContext;
+  /** Logger for debug/info/warning output. */
+  logger: Logger;
+  /**
+   * Trigger command string (e.g. '/pi') for stripping invocation prefixes.
+   * When omitted, defaults to '/pi'.
+   */
+  trigger?: string;
 }
 
 /**
@@ -87,30 +94,27 @@ export interface GitHubPlatformDeps {
  * instances since all three use the same CI/CD environment variables and
  * GitHub-compatible REST APIs.
  *
- * @param deps - Optional explicit dependencies (Octokit + context).
- *               When provided, the provider is fully decoupled from
- *               `@actions/github` globals. When omitted, falls back to
- *               the `@actions/github` singleton for backward compatibility.
+ * @param deps - Explicit dependencies (Octokit + context + logger).
  * @returns A PlatformProvider instance.
  */
-export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): PlatformProvider {
+export function createGitHubPlatformProvider(deps: GitHubPlatformDeps): PlatformProvider {
   const type = detectPlatform();
 
-  // Set module-level deps so sub-functions can access them
-  const resolvedContext: PlatformContext = deps?.context ?? {
-    repo: github.context.repo,
-    issue: github.context.issue,
-    eventName: github.context.eventName,
-    payload: github.context.payload,
-    serverUrl: github.context.serverUrl || 'https://github.com',
-    runId: github.context.runId,
-    workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
-  };
+  // Use the provided deps directly — no fallbacks
+  const resolvedContext = deps.context;
+  const logger = deps.logger;
+  const octokit = deps.octokit;
 
-  if (deps?.octokit) {
-    setOctokit(deps.octokit);
-  }
-  setPlatformContext(resolvedContext);
+  // Resolve the trigger
+  const trigger = deps?.trigger;
+
+  // Build the deps bag that will be threaded through all sub-functions
+  const moduleDeps: GitHubModuleDeps = {
+    octokit,
+    context: resolvedContext,
+    logger,
+    ...(trigger !== undefined ? { trigger } : {}),
+  };
 
   return {
     type,
@@ -120,63 +124,63 @@ export function createGitHubPlatformProvider(deps?: GitHubPlatformDeps): Platfor
     },
 
     async addReaction(): Promise<CreateReactionType | undefined> {
-      return addReaction();
+      return addReaction(moduleDeps);
     },
 
     async deleteReaction(reaction: CreateReactionType | undefined): Promise<void> {
-      await deleteReaction(reaction);
+      await deleteReaction(moduleDeps, reaction);
     },
 
     async createFinalComment(body: string, metadata: CommentMetadata): Promise<void> {
-      await createFinalComment(body, metadata);
+      await createFinalComment(moduleDeps, body, metadata);
     },
 
     async getPrompt(inputPrompt?: string): Promise<string | undefined> {
-      return getPrompt(inputPrompt);
+      return getPrompt(moduleDeps, inputPrompt);
     },
 
     getStartTime(): Temporal.Instant | undefined {
-      return getStartTimeFromContext();
+      return getStartTimeFromContext(moduleDeps);
     },
 
     async createPullRequest(
       params: CreatePullRequestParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: CreatePullRequestDetails }> {
-      return createPullRequest(params);
+      return createPullRequest(moduleDeps, params);
     },
 
     async updatePullRequest(
       params: UpdatePullRequestParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: UpdatePullRequestDetails }> {
-      return updatePullRequest(params);
+      return updatePullRequest(moduleDeps, params);
     },
 
     async getIssueOrPRThread(
       params?: GetIssueOrPRThreadParams
     ): Promise<IssueOrPRThread | undefined> {
-      return getIssueOrPRThread(params);
+      return getIssueOrPRThread(moduleDeps, params);
     },
 
     async getPRDiff(owner: string, repo: string, pullNumber: number, ignoreFiles?: string[]): Promise<string> {
-      return fetchPRDiff(owner, repo, pullNumber, ignoreFiles);
+      return fetchPRDiff(moduleDeps, owner, repo, pullNumber, ignoreFiles);
     },
 
     async createReview(
       params: CreateReviewParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: CreateReviewDetails }> {
-      return createReview(params);
+      return createReview(moduleDeps, params);
     },
 
     async getCIStatus(
       params: GetCIStatusParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: GetCIStatusDetails }> {
-      return getCIStatus(params);
+      return getCIStatus(moduleDeps, params);
     },
 
     async getWorkflowRunLogs(
       params: GetWorkflowRunLogsParams
     ): Promise<{ content: { type: 'text'; text: string }[]; details: GetWorkflowRunLogsDetails }> {
-      return getWorkflowRunLogs(params);
+      return getWorkflowRunLogs(moduleDeps, params);
     },
   };
 }
