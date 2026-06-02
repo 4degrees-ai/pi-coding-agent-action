@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-06-02
+
+### Added
+
+- add `loaded_tools` input for selective tool loading (#218)
+- add CI/CD awareness tools (get_ci_status / get_workflow_run_logs) (#216)
+- add optional auto-compaction and JSONL session export (#227)
+- add separate Cost column in comment footer (#248)
+
+### Changed
+
+- add auto-compaction and JSONL session export to README (#231)
+- add PR review with existing context example to README (#234)
+- cleanup AGENTS.md
+- consolidate ESLint config to reduce duplication (#220)
+- eliminate env-var coupling in library code (#242)
+- eliminate module-level singletons and @actions/* fallbacks (#238)
+- implement reusable Pi orchestrator library (#233) (#236)
+- README.md: fix `|` char escape (#246)
+- replace build-time constants with runtime version resolution (#244)
+- Update AGENTS.md
+- **deps**: update dependencies (#217)
+- **deps**: update dependencies (#223)
+
+### Fixed
+
+- ensure custom models/providers are imported before Agent setup
+- ensure newline char before debug log
+- ensure packages are loaded correctly in the build
+- ensure versions strings are ok
+- stop tracking dist/ in git, prevent PRs from sneaking in dist changes
+- update dependencies and simplify loaded_tools with SDK native tools option (#222)
+- use correct path for packageDir
+- use list for loaded_tools inputs
+
 ## [2.18.0] - 2026-05-27
 
 ### Added
@@ -372,7 +407,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.18.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.0...HEAD
+[2.19.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.18.0...v2.19.0
 [2.18.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.1...v2.18.0
 [2.17.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.0...v2.17.1
 [2.17.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.16.1...v2.17.0
