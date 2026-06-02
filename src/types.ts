@@ -145,6 +145,9 @@ export type PiAgentFactory = (
 export interface AgentEvents {
   /** Called for each thinking delta during agent execution. */
   onThinkingDelta?(delta: string): void;
+  /** Called when a thinking segment ends. Frontends can use this to flush or
+   *  terminate the stdout line before any ::debug:: workflow commands fire. */
+  onThinkingComplete?(): void;
   /** Called once after the prompt completes (e.g. to flush newlines). */
   onPromptComplete?(): void;
 }

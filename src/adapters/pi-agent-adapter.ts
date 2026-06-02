@@ -22,6 +22,7 @@ export const createRealPiAgent: PiAgentFactory = (
 ): PiAgent => {
   const events: AgentEvents = {
     onThinkingDelta: delta => process.stdout.write(delta),
+    onThinkingComplete: () => process.stdout.write('\n'),
     onPromptComplete: () => process.stdout.write('\n'),
   };
   const agent = new Agent(logger, provider, config, events);

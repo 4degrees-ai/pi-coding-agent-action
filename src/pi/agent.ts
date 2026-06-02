@@ -204,6 +204,12 @@ export class Agent {
           // Route thinking delta through the events interface
           this.events.onThinkingDelta?.(event.assistantMessageEvent.delta);
           break;
+        case 'thinking_end':
+          // Ensure the output line is terminated before any ::debug:: workflow
+          // command fires (e.g. from turn_end extension events). Otherwise
+          // ::debug:: lands mid-line and the Actions runner can't parse it.
+          this.events.onThinkingComplete?.();
+          break;
         default:
           break;
       }

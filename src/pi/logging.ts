@@ -51,21 +51,25 @@ export const loggingFactory = (
   });
 
   pi.on('tool_execution_update', async event => {
+    logger.info('');
     logger.debug(
       `🔧 Tool ${event.toolName} (${event.toolCallId}) update: ${truncateText(JSON.stringify(event.partialResult), 200)}`
     );
   });
 
   pi.on('turn_start', async event => {
+    logger.info('');
     logger.debug(`🔄 Turn ${event.turnIndex} started`);
   });
 
   pi.on('turn_end', async event => {
     const toolCount = event.toolResults.length;
+    logger.info('');
     logger.debug(`🔄 Turn ${event.turnIndex} completed (${toolCount} tool result(s))`);
   });
 
   pi.on('after_provider_response', async event => {
+    logger.info('');
     logger.debug(`📡 Provider response: status ${event.status}`);
   });
 
