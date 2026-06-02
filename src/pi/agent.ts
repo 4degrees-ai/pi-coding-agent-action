@@ -131,6 +131,14 @@ export class Agent {
       }
     }
 
+    // Log extension loading errors so that failures are visible in the
+    // action output. The SDK captures these in extensionsResult.errors but
+    // does not surface them through services.diagnostics.
+    const extensionErrors = services.resourceLoader.getExtensions().errors;
+    for (const error of extensionErrors) {
+      this.logger.error(`[extension] ${error.path}: ${error.error}`);
+    }
+
     // Resolve the model AFTER extensions have loaded — extensions that call
     // pi.registerProvider() will have populated the model registry by now.
     const foundModel = this.modelRegistry.find(this.config.provider, this.config.model);

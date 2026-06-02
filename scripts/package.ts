@@ -1,6 +1,56 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { build } from 'esbuild';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { build, type Plugin } from 'esbuild';
 import { join } from 'node:path';
+
+/**
+ * esbuild plugin that patches the SDK's `getAliases()` function to handle
+ * the bundled action context.
+ *
+ * In the deployed GitHub Action, `node_modules` doesn't exist — everything
+ * is bundled into `dist/index.js`. The SDK's `getAliases()` calls
+ * `require.resolve("typebox")` which throws `MODULE_NOT_FOUND` in this
+ * context, causing jiti creation to fail and preventing extension loading.
+ *
+ * This plugin wraps the body of `getAliases()` in a try-catch so that if
+ * `require.resolve` fails, the function returns an empty aliases object.
+ * Extensions that only use `import type` (which are erased by jiti) will
+ * still load correctly without any aliases.
+ *
+ * This patch can be removed once the SDK handles the bundled context natively.
+ */
+function patchSDKLoaderPlugin(): Plugin {
+  return {
+    name: 'patch-sdk-loader',
+    setup(build) {
+      build.onLoad({ filter: /extensions\/loader\.js$/ }, async (args) => {
+        const source = readFileSync(args.path, 'utf-8');
+
+        // Wrap getAliases() body in try-catch to handle missing node_modules
+        const patched = source
+          .replace(
+            // Match the start of getAliases() and inject a try { after the early return
+            /function getAliases\(\) \{\s*\n(\s*if \(_aliases\)\s*\n\s*return _aliases;\s*\n)/,
+            'function getAliases() {\n$1    try {\n'
+          )
+          .replace(
+            // Match _aliases assignment + return + function closing brace, insert catch block
+            /(_aliases = \{[^}]+\};\s*\n)(\s*return _aliases;\s*\n)(\})/,
+            '$1    $2    } catch { _aliases = {}; return _aliases; }\n$3'
+          );
+
+        if (patched === source) {
+          console.warn(
+            '[patch-sdk-loader] WARNING: getAliases() pattern not matched — patch not applied. ' +
+            'The SDK may have changed. Extension loading may fail in the bundled action.'
+          );
+          return { contents: source, loader: 'js' };
+        }
+
+        return { contents: patched, loader: 'js' };
+      });
+    },
+  };
+}
 
 export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const version = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8')).version;
@@ -16,6 +66,7 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
     outfile: join(cwd, 'dist/index.js'),
     format: 'cjs',
     minify: true,
+    plugins: [patchSDKLoaderPlugin()],
     define: {
       'import.meta.url': 'importMetaUrl',
       __PI_CODING_AGENT_VERSION__: JSON.stringify(piVersion),
