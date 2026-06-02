@@ -357,6 +357,45 @@ describe('ActionOrchestrator', () => {
       expect(metadata.executionDuration).toBeInstanceOf(Temporal.Duration);
     });
 
+    test('includes actionVersion in final comment metadata', async () => {
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const calls = (mockGit.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const metadata = calls[0][1];
+
+      expect(metadata.actionVersion).toBeDefined();
+      expect(typeof metadata.actionVersion).toBe('string');
+      expect(metadata.actionVersion).not.toBe('unknown');
+      expect(metadata.actionVersion).toMatch(/^\d+\.\d+\.\d+/);
+    });
+
+    test('includes version in sessionStats when stats are available', async () => {
+      const sessionStats = {
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        cost: 0.001,
+        version: '0.99.0-test',
+      };
+      const runMock = mock(async () => ({
+        result: 'Done!',
+        sessionStats,
+      }));
+      mockPiAgent.run = runMock as any;
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const calls = (mockGit.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const metadata = calls[0][1];
+
+      expect(metadata.sessionStats).toBeDefined();
+      expect(metadata.sessionStats.version).toBe('0.99.0-test');
+    });
+
     test('uses github start time when available', async () => {
       const githubStartTime = Temporal.Instant.from('2024-01-15T10:30:00Z');
       const getStartTimeMock = mock(() => githubStartTime);
@@ -736,6 +775,7 @@ describe('ActionOrchestrator', () => {
         outputTokens: 50,
         totalTokens: 150,
         cost: 0.001,
+        version: '2.18.0',
       };
       const runMock = mock(async () => ({
         result: 'Here are your tests!',
@@ -752,6 +792,20 @@ describe('ActionOrchestrator', () => {
       expect(calls.length).toBeGreaterThan(0);
       const metadata = calls[0][1];
       expect(metadata.sessionStats).toEqual(sessionStats);
+    });
+
+    test('passes actionVersion through metadata to createFinalComment', async () => {
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      const calls = (mockGit.createFinalComment as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const metadata = calls[0][1];
+
+      // actionVersion should be a non-empty, non-unknown version string
+      expect(metadata.actionVersion).toBeDefined();
+      expect(metadata.actionVersion).not.toBe('unknown');
+      expect(typeof metadata.actionVersion).toBe('string');
     });
   });
 
