@@ -130,6 +130,6 @@ export function gatherActionsConfig(): PiConfig {
      * Set packageDir so the Agent can point PI_PACKAGE_DIR at the bundled
      * SDK assets when running from the GitHub Action's dist/index.js.
      */
-    packageDir: path.join(__dirname, '..', 'pi-sdk'),
+    packageDir: path.join(__dirname, 'pi-sdk'),
   };
 }
