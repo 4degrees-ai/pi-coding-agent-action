@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test, mock } from 'bun:test';
 import { createPRToolFactory } from '../../../src/pi/tools/create-pr';
 import type { PlatformProvider } from '../../../src/platform';

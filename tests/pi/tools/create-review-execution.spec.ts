@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test } from 'bun:test';
 import { createReviewToolFactory } from '../../../src/pi/tools/create-review';
 import type { PlatformProvider } from '../../../src/platform';

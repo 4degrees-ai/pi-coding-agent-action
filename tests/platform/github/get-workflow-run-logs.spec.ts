@@ -4,7 +4,7 @@
  * Tests the actual GitHub API interaction logic including job listing,
  * log downloading, truncation, byte budget management, and output formatting.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test, mock, beforeEach, beforeAll } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

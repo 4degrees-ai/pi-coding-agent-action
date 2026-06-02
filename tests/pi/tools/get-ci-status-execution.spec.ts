@@ -4,7 +4,7 @@
  * Verifies that the tool correctly forwards parameters to the platform
  * provider and returns well-formed results.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test, mock } from 'bun:test';
 import { getCIStatusToolFactory } from '../../../src/pi/tools/get-ci-status';
 import type { PlatformProvider } from '../../../src/platform';

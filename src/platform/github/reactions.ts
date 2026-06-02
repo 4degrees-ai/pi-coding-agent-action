@@ -55,7 +55,7 @@ export async function addReaction(
   const comment = deps.context.payload.comment as
     | { id?: number; pull_request_review_id?: number }
     | undefined;
-  if (!comment || comment.id === undefined) {
+  if (comment?.id === undefined) {
     deps.logger.debug('[reactions] no comment found, skipping reaction');
     return;
   }
@@ -104,7 +104,7 @@ export async function deleteReaction(
   const comment = deps.context.payload.comment as
     | { id?: number; pull_request_review_id?: number }
     | undefined;
-  if (!comment || comment.id === undefined) {
+  if (comment?.id === undefined) {
     return;
   }
 

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 
 // Mock @actions/core (not used by reactions.ts directly, but may be transitively loaded)

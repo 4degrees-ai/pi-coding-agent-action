@@ -2,7 +2,7 @@ import { describe, expect, test, mock } from 'bun:test';
 
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const _mockedWrite = mock((...args: any[]) => {
   const msg = String(args[0] ?? '');
   if (msg.startsWith('::')) {

@@ -3,6 +3,6 @@
   "compilerOptions": {
     "noEmit": true,
   },
-  "include": ["**/*.spec.ts", "helpers/**/*.ts"],
+  "include": ["**/*.spec.ts", "helpers/**/*.ts", "fixtures/**/*.ts"],
   "exclude": ["../node_modules", "../dist"],
 }

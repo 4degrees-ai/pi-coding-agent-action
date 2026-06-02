@@ -6,7 +6,7 @@
  * buildThreadResult, and the top-level getIssueOrPRThread function.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test, mock } from 'bun:test';
 import { getIssueOrPRThread } from '../../../src/platform/github/tools/thread';
 import type { GitHubModuleDeps, IssueOrPRThread } from '../../../src/platform/github/types';

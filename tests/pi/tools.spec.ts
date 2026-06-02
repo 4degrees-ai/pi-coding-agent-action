@@ -6,7 +6,7 @@ import * as os from 'node:os';
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
 // so they don't appear as CI annotations in test output.
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- stdout.write accepts variable args
+
 const _mockedWrite = mock((...args: any[]) => {
   const msg = String(args[0] ?? '');
   if (msg.startsWith('::')) {

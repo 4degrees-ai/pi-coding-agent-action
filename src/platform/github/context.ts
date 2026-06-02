@@ -223,7 +223,7 @@ async function getComment(deps: GitHubModuleDeps): Promise<TriggeringComment | u
     return { id: review.id, body };
   }
 
-  if (!comment || comment.id === undefined) {
+  if (comment?.id === undefined) {
     return;
   }
 

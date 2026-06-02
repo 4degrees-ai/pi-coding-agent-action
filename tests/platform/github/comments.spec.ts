@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core

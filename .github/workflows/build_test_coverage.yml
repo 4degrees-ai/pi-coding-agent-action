@@ -10,6 +10,8 @@ on:
     secrets:
       token:
         required: false
+      token_custom:
+        required: false
 
 permissions:
   id-token: write
@@ -51,3 +53,6 @@ jobs:
           E2E_PROVIDER: ${{ vars.PROVIDER }}
           E2E_MODEL: ${{ vars.MODEL_LIGHT }}
           E2E_TOKEN: ${{ secrets.token }}
+          E2E_MODEL_CUSTOM: ${{ vars.MODEL_CUSTOM }}
+          E2E_PROVIDER_CUSTOM: ${{ vars.PROVIDER_CUSTOM }}
+          E2E_TOKEN_CUSTOM: ${{ secrets.token_custom }}

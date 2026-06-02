@@ -4,7 +4,7 @@
  * Covers the end-to-end flow of creating a pull request via the GitHub API.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test, mock } from 'bun:test';
 import {
   createPullRequest,

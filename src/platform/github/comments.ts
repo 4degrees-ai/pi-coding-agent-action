@@ -83,7 +83,7 @@ async function createComment(
   // Check if this is a reply to a PR review comment (inline comment)
   if (isPullRequestReviewComment(deps)) {
     const comment = deps.context.payload.comment as { id?: number } | undefined;
-    if (!comment || comment.id === undefined) {
+    if (comment?.id === undefined) {
       deps.logger.debug('[comments] no comment found for review reply');
       return undefined;
     }

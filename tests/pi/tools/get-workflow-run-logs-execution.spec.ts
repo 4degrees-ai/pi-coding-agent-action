@@ -4,7 +4,7 @@
  * Verifies that the tool correctly forwards parameters to the platform
  * provider and returns well-formed results.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { describe, expect, test, mock } from 'bun:test';
 import { getWorkflowRunLogsToolFactory } from '../../../src/pi/tools/get-workflow-run-logs';
 import type { PlatformProvider } from '../../../src/platform';

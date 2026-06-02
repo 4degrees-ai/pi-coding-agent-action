@@ -17,7 +17,7 @@
  *   bun test tests/e2e/pi-agent.spec.ts
  */
 
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 import type { Agent } from '../../src/pi/agent.js';
 import type { PlatformProvider } from '../../src/platform';
 
@@ -196,13 +196,6 @@ try {
 }
 
 // ============================================================================
-// Mock GitHub Functions for Tool Testing
-// ============================================================================
-
-// Mock getIssueOrPRThread to provide fake issue data for tool testing
-let _mockGetIssueOrPRThread: ReturnType<typeof mock> | undefined;
-
-// ============================================================================
 // Test Helpers
 // ============================================================================
 
@@ -244,209 +237,175 @@ async function createAgent(): Promise<Agent> {
 }
 
 // ============================================================================
+// Env-var gating at describe-time
+// ============================================================================
+
+const E2E_ENABLED =
+  Bun.env.RUN_E2E_TESTS === '1' && Bun.env.E2E_TOKEN && Bun.env.E2E_PROVIDER && Bun.env.E2E_MODEL;
+
+// ============================================================================
 // E2E Tests
 // ============================================================================
 
-describe('E2E: Real Pi Agent with Mocked GitHub', () => {
-  let skipTests = false;
-
-  beforeEach(() => {
-    // Skip if E2E tests are not enabled
-    skipTests = Bun.env.RUN_E2E_TESTS !== '1';
-    if (skipTests) {
-      return;
-    }
-
-    // Reset tool-specific mocks
-    _mockGetIssueOrPRThread = undefined;
+// When env vars are missing or RUN_E2E_TESTS is not set, register one
+// test.skip so the suite reports as "skipped" instead of silently passing.
+if (!E2E_ENABLED) {
+  describe('E2E: Real Pi Agent with Mocked GitHub', () => {
+    test.skip('requires RUN_E2E_TESTS=1 + E2E_TOKEN, E2E_PROVIDER, E2E_MODEL', () => {});
   });
+} else {
+  describe('E2E: Real Pi Agent with Mocked GitHub', () => {
+    describe('basic functionality', () => {
+      test(
+        'runs minimal prompt without tool calling',
+        async () => {
+          const agent = await createAgent();
+          await agent.ready();
+          const { result, sessionStats } = await agent.run('Say "hello world"');
 
-  describe('basic functionality', () => {
-    test(
-      'runs minimal prompt without tool calling',
-      async () => {
-        if (skipTests) {
-          return;
-        }
+          expect(result).toBeTruthy();
+          expect(result).toMatch(/hello world/i);
+          expect(sessionStats).toBeDefined();
+          expect(sessionStats?.totalTokens).toBeGreaterThan(0);
+        },
+        E2E_TIMEOUT
+      );
 
-        const agent = await createAgent();
-        await agent.ready();
-        const { result, sessionStats } = await agent.run('Say "hello world"');
+      test(
+        'handles simple arithmetic prompt without tools',
+        async () => {
+          const agent = await createAgent();
+          await agent.ready();
+          const { result, sessionStats } = await agent.run(
+            'What is 2 + 2? Answer with just a number.'
+          );
 
-        expect(result).toBeTruthy();
-        expect(result).toMatch(/hello world/i);
-        expect(sessionStats).toBeDefined();
-        expect(sessionStats?.totalTokens).toBeGreaterThan(0);
-      },
-      E2E_TIMEOUT
-    );
+          expect(result).toBeTruthy();
+          expect(result).toMatch(/4/);
+          expect(sessionStats).toBeDefined();
+          expect(sessionStats?.totalTokens).toBeGreaterThan(0);
+        },
+        E2E_TIMEOUT
+      );
 
-    test(
-      'handles simple arithmetic prompt without tools',
-      async () => {
-        if (skipTests) {
-          return;
-        }
+      test(
+        'invalid model throws during ready (model resolution deferred after extension load)',
+        async () => {
+          const { token, provider } = validateE2EEnvVars();
+          const { Agent } = await import('../../src/pi/agent.js');
 
-        const agent = await createAgent();
-        await agent.ready();
-        const { result, sessionStats } = await agent.run(
-          'What is 2 + 2? Answer with just a number.'
-        );
+          const agent = new Agent(mockCoreAdapter, mockPlatformProvider, {
+            model: 'invalid-model-xyz',
+            provider,
+            token,
+            thinkingLevel: 'off',
+            promptInput: '',
+          });
 
-        expect(result).toBeTruthy();
-        expect(result).toMatch(/4/);
-        expect(sessionStats).toBeDefined();
-        expect(sessionStats?.totalTokens).toBeGreaterThan(0);
-      },
-      E2E_TIMEOUT
-    );
+          // Constructor no longer throws — model resolution is deferred to
+          // ready() so that extension-provided providers are available.
+          await expect(agent.ready()).rejects.toThrow('Model not found');
+        },
+        E2E_TIMEOUT
+      );
 
-    test(
-      'invalid model throws during ready (model resolution deferred after extension load)',
-      async () => {
-        if (skipTests) {
-          return;
-        }
+      test(
+        'empty prompt throws from run method',
+        async () => {
+          const agent = await createAgent();
+          await agent.ready();
 
-        const { token, provider } = validateE2EEnvVars();
-        const { Agent } = await import('../../src/pi/agent.js');
+          await expect(agent.run('')).rejects.toThrow('no text, skipping prompt');
+          await expect(agent.run(undefined as unknown as string)).rejects.toThrow(
+            'no text, skipping prompt'
+          );
+        },
+        E2E_TIMEOUT
+      );
 
-        const agent = new Agent(mockCoreAdapter, mockPlatformProvider, {
-          model: 'invalid-model-xyz',
-          provider,
-          token,
-          thinkingLevel: 'off',
-          promptInput: '',
-        });
+      test(
+        'agent can be called multiple times after ready',
+        async () => {
+          const agent = await createAgent();
+          await agent.ready();
 
-        // Constructor no longer throws — model resolution is deferred to
-        // ready() so that extension-provided providers are available.
-        await expect(agent.ready()).rejects.toThrow('Model not found');
-      },
-      E2E_TIMEOUT
-    );
+          const result1 = await agent.run('Say "one"');
+          const result2 = await agent.run('Say "two"');
 
-    test(
-      'empty prompt throws from run method',
-      async () => {
-        if (skipTests) {
-          return;
-        }
+          expect(result1.result).toMatch(/one/i);
+          expect(result2.result).toMatch(/two/i);
+          expect(result1.sessionStats).toBeDefined();
+          expect(result2.sessionStats).toBeDefined();
+        },
+        E2E_TIMEOUT
+      );
 
-        const agent = await createAgent();
-        await agent.ready();
+      test(
+        'when valid credentials are provided, test connects successfully',
+        async () => {
+          const agent = await createAgent();
+          await agent.ready();
+          const { result } = await agent.run('Hi');
 
-        await expect(agent.run('')).rejects.toThrow('no text, skipping prompt');
-        await expect(agent.run(undefined as unknown as string)).rejects.toThrow(
-          'no text, skipping prompt'
-        );
-      },
-      E2E_TIMEOUT
-    );
+          expect(result).toBeTruthy();
+        },
+        E2E_TIMEOUT
+      );
 
-    test(
-      'agent can be called multiple times after ready',
-      async () => {
-        if (skipTests) {
-          return;
-        }
+      test(
+        'session includes version from logging module',
+        async () => {
+          const agent = await createAgent();
+          await agent.ready();
+          const { sessionStats } = await agent.run('Say "test"');
 
-        const agent = await createAgent();
-        await agent.ready();
+          expect(sessionStats).toBeDefined();
+          expect(sessionStats?.version).toMatch(/^\d+\.\d+\.\d+/);
+          expect(sessionStats?.version.length).toBeGreaterThan(0);
+        },
+        E2E_TIMEOUT
+      );
+    });
 
-        const result1 = await agent.run('Say "one"');
-        const result2 = await agent.run('Say "two"');
+    describe('session management', () => {
+      test(
+        'empty prompt throws from run method',
+        async () => {
+          const agent = await createAgent();
+          await agent.ready();
 
-        expect(result1.result).toMatch(/one/i);
-        expect(result2.result).toMatch(/two/i);
-        expect(result1.sessionStats).toBeDefined();
-        expect(result2.sessionStats).toBeDefined();
-      },
-      E2E_TIMEOUT
-    );
+          await expect(agent.run('')).rejects.toThrow('no text, skipping prompt');
+          await expect(agent.run(undefined as unknown as string)).rejects.toThrow(
+            'no text, skipping prompt'
+          );
+        },
+        E2E_TIMEOUT
+      );
+    });
 
-    test(
-      'when valid credentials are provided, test connects successfully',
-      async () => {
-        if (skipTests) {
-          return;
-        }
+    describe('action outputs data', () => {
+      test(
+        'PromptResult contains all fields needed for action outputs',
+        async () => {
+          const agent = await createAgent();
+          await agent.ready();
+          const { result, sessionStats } = await agent.run('Say "test"');
 
-        const agent = await createAgent();
-        await agent.ready();
-        const { result } = await agent.run('Hi');
+          // response output — must be a non-empty string
+          expect(result).toBeTruthy();
+          expect(typeof result).toBe('string');
 
-        expect(result).toBeTruthy();
-      },
-      E2E_TIMEOUT
-    );
-
-    test(
-      'session includes version from logging module',
-      async () => {
-        if (skipTests) {
-          return;
-        }
-
-        const agent = await createAgent();
-        await agent.ready();
-        const { sessionStats } = await agent.run('Say "test"');
-
-        expect(sessionStats).toBeDefined();
-        expect(sessionStats?.version).toMatch(/^\d+\.\d+\.\d+/);
-        expect(sessionStats?.version.length).toBeGreaterThan(0);
-      },
-      E2E_TIMEOUT
-    );
+          // success is determined by the orchestrator (no error thrown),
+          // but we can verify sessionStats has the fields needed for
+          // the token/cost/duration outputs
+          expect(sessionStats).toBeDefined();
+          expect(sessionStats!.inputTokens).toBeGreaterThan(0);
+          expect(sessionStats!.outputTokens).toBeGreaterThan(0);
+          expect(typeof sessionStats!.cost).toBe('number');
+          expect(sessionStats!.cost).toBeGreaterThanOrEqual(0);
+        },
+        E2E_TIMEOUT
+      );
+    });
   });
-
-  describe('session management', () => {
-    test(
-      'empty prompt throws from run method',
-      async () => {
-        if (skipTests) {
-          return;
-        }
-
-        const agent = await createAgent();
-        await agent.ready();
-
-        await expect(agent.run('')).rejects.toThrow('no text, skipping prompt');
-        await expect(agent.run(undefined as unknown as string)).rejects.toThrow(
-          'no text, skipping prompt'
-        );
-      },
-      E2E_TIMEOUT
-    );
-  });
-
-  describe('action outputs data', () => {
-    test(
-      'PromptResult contains all fields needed for action outputs',
-      async () => {
-        if (skipTests) {
-          return;
-        }
-
-        const agent = await createAgent();
-        await agent.ready();
-        const { result, sessionStats } = await agent.run('Say "test"');
-
-        // response output — must be a non-empty string
-        expect(result).toBeTruthy();
-        expect(typeof result).toBe('string');
-
-        // success is determined by the orchestrator (no error thrown),
-        // but we can verify sessionStats has the fields needed for
-        // the token/cost/duration outputs
-        expect(sessionStats).toBeDefined();
-        expect(sessionStats!.inputTokens).toBeGreaterThan(0);
-        expect(sessionStats!.outputTokens).toBeGreaterThan(0);
-        expect(typeof sessionStats!.cost).toBe('number');
-        expect(sessionStats!.cost).toBeGreaterThanOrEqual(0);
-      },
-      E2E_TIMEOUT
-    );
-  });
-});
+}

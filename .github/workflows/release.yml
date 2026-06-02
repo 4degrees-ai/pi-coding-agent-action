@@ -23,6 +23,7 @@ jobs:
       e2e: true
     secrets:
       token: ${{ secrets.API_KEY }}
+      token_custom: ${{ secrets.API_KEY_CUSTOM }}
 
   release:
     name: semantic-release

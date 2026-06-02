@@ -4,8 +4,8 @@
  * Tests the Pi agent wrapper including session stats handling.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, test, mock } from 'bun:test';
+import { resolve } from 'node:path';
 
 // Mock @actions/core to provide required inputs before importing Agent
 const noop = (): void => {};
@@ -466,6 +466,65 @@ describe('Agent', () => {
       await agent.ready();
 
       expect(infoMessages).not.toContain('[auto-compaction] enabled');
+    });
+  });
+
+  describe('extension error logging', () => {
+    test('logs extension loading errors from getExtensions().errors', async () => {
+      const errorMessages: string[] = [];
+      const testCore = {
+        ...mockCoreAdapter,
+        error: mock((msg: string) => {
+          errorMessages.push(msg);
+        }),
+      };
+
+      // Use the intentionally broken extension fixture
+      const brokenExtensionPath = resolve(__dirname, '../fixtures/extensions/broken-extension.ts');
+
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        extensions: [brokenExtensionPath],
+      });
+
+      // ready() should still succeed — the broken extension fails to load
+      // but the built-in anthropic provider is still available.
+      await agent.ready();
+
+      // The extension error should have been logged via logger.error()
+      const extensionErrors = errorMessages.filter(m => m.startsWith('[extension]'));
+      expect(extensionErrors.length).toBeGreaterThan(0);
+      // The error message should reference the broken extension path
+      expect(extensionErrors[0]).toContain('intentional extension loading failure');
+    });
+
+    test('no extension errors logged when all extensions load cleanly', async () => {
+      const errorMessages: string[] = [];
+      const testCore = {
+        ...mockCoreAdapter,
+        error: mock((msg: string) => {
+          errorMessages.push(msg);
+        }),
+      };
+
+      // Create agent without any extensions
+      const agent = new Agent(testCore as any, mockPlatformProvider, {
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+        // No extensions
+      });
+
+      await agent.ready();
+
+      const extensionErrors = errorMessages.filter(m => m.startsWith('[extension]'));
+      expect(extensionErrors).toHaveLength(0);
     });
   });
 });

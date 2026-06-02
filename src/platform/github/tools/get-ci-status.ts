@@ -64,7 +64,7 @@ async function resolveHeadSha(
   }
 
   // Fall back to context SHA
-  return deps.context.sha || undefined;
+  return deps.context.sha ?? undefined;
 }
 
 /**
