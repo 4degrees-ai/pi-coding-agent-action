@@ -10,11 +10,8 @@ src/*.js.map
 # Shim import
 !src/import-meta-url.js
 
-# Intermediate dist artifacts (maps and declarations)
-dist/*.d.ts
-dist/*.d.ts.map
-dist/*.js.map
-dist/*.map
+# Build artifacts (tracked via CI force-add only — do not include in PRs)
+dist/
 
 # Logs and temp files
 *.log
