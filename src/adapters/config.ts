@@ -15,7 +15,7 @@ import type { PiConfig } from '../types';
  * Parse the `loaded_tools` input.
  *
  * - `'all'`, empty, or whitespace-only → `undefined` (use all tools)
- * - Comma-separated list of tool names → `string[]`
+ * - List of tool names (one per line) → `string[]`
  *
  * Whitespace around tool names is trimmed. Empty items after splitting are
  * discarded. Duplicate names are deduplicated.
@@ -26,7 +26,7 @@ function parseLoadedTools(input: string): string[] | undefined {
     return undefined;
   }
   const tools = trimmed
-    .split(',')
+    .split('\n')
     .map(t => t.trim())
     .filter(Boolean);
   return tools.length > 0 ? [...new Set(tools)] : undefined;

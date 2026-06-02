@@ -46,7 +46,7 @@ inputs:
     default: 'true'
 
   loaded_tools:
-    description: "Controls which tools are loaded into the session. Defaults to 'all' which loads all available tools (built-in + custom). Accepts a comma-separated list of tool names to load only those tools. Tool names must match exactly — unknown names cause the run to fail early."
+    description: "Controls which tools are loaded into the session. Defaults to 'all' which loads all available tools (built-in + custom). Accepts a list of tool names (one per line) to load only those tools. Tool names must match exactly — unknown names cause the run to fail early."
     required: false
     default: 'all'
 

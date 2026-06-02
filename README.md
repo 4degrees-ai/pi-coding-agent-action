@@ -239,7 +239,10 @@ Use `loaded_tools` to control exactly which tools (built-in **and** Pi's own) ar
     provider: openai
     model: gpt-5.4
     token: ${{ secrets.OPENAI_API_KEY }}
-    loaded_tools: 'get_pr_diff,create_pull_request_review,get_issue_or_pr_thread'
+    loaded_tools: |
+      get_pr_diff
+      create_pull_request_review
+      get_issue_or_pr_thread
 ```
 
 The default value is `all`. Tool names must match exactly — the run fails early if a name doesn't correspond to a registered tool.
@@ -410,7 +413,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
-| `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a comma-separated list of tool names (built-in or custom) to load — unknown names cause the run to fail early | No | `all` |
+| `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a list of tool names (one per line) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |

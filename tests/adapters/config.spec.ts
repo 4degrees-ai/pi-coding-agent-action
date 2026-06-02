@@ -193,15 +193,19 @@ describe('gatherActionsConfig', () => {
   });
 
   describe('loaded_tools parsing', () => {
-    test('parses comma-separated tool names', () => {
+    test('parses newline-separated tool names (YAML list style)', () => {
       mockGetInput.mockImplementation((name: string) => {
         if (name === 'loaded_tools') {
-          return 'get_pr_diff,create_pull_request';
+          return 'get_pr_diff\ncreate_pull_request\nget_issue_or_pr_thread';
         }
         return 'value';
       });
       const config = gatherActionsConfig();
-      expect(config.loadedTools).toEqual(['get_pr_diff', 'create_pull_request']);
+      expect(config.loadedTools).toEqual([
+        'get_pr_diff',
+        'create_pull_request',
+        'get_issue_or_pr_thread',
+      ]);
     });
 
     test('returns undefined for "all"', () => {
@@ -229,7 +233,7 @@ describe('gatherActionsConfig', () => {
     test('deduplicates tool names', () => {
       mockGetInput.mockImplementation((name: string) => {
         if (name === 'loaded_tools') {
-          return 'read,read,write';
+          return 'read\nread\nwrite';
         }
         return 'value';
       });
