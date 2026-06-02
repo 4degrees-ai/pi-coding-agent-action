@@ -303,7 +303,7 @@ describe('E2E: Real Pi Agent with Mocked GitHub', () => {
     );
 
     test(
-      'invalid model throws during constructor',
+      'invalid model throws during ready (model resolution deferred after extension load)',
       async () => {
         if (skipTests) {
           return;
@@ -312,15 +312,17 @@ describe('E2E: Real Pi Agent with Mocked GitHub', () => {
         const { token, provider } = validateE2EEnvVars();
         const { Agent } = await import('../../src/pi/agent.js');
 
-        expect(() => {
-          new Agent(mockCoreAdapter, mockPlatformProvider, {
-            model: 'invalid-model-xyz',
-            provider,
-            token,
-            thinkingLevel: 'off',
-            promptInput: '',
-          });
-        }).toThrow('Model not found');
+        const agent = new Agent(mockCoreAdapter, mockPlatformProvider, {
+          model: 'invalid-model-xyz',
+          provider,
+          token,
+          thinkingLevel: 'off',
+          promptInput: '',
+        });
+
+        // Constructor no longer throws — model resolution is deferred to
+        // ready() so that extension-provided providers are available.
+        await expect(agent.ready()).rejects.toThrow('Model not found');
       },
       E2E_TIMEOUT
     );

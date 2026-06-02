@@ -90,19 +90,6 @@ function createRealAgent(): InstanceType<typeof Agent> {
 
 describe('Agent', () => {
   describe('constructor', () => {
-    test('throws error for non-existent model', () => {
-      // Use a provider/model combo that won't exist in the registry
-      expect(() => {
-        const _agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
-          model: 'model-name',
-          provider: 'fake-provider',
-          token: 'test-token',
-          thinkingLevel: 'off',
-          promptInput: '',
-        });
-      }).toThrow('Model not found');
-    });
-
     test('stores token in auth storage when provided', () => {
       const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
         model: 'claude-sonnet-4-5',
@@ -122,6 +109,8 @@ describe('Agent', () => {
       };
       const adapter = { ...mockCoreAdapter, debug: mock(debugLogger) };
 
+      // Constructor no longer throws for unknown models — resolution is
+      // deferred to ready() so that extension-provided providers are available.
       new Agent(adapter as any, mockPlatformProvider, {
         model: 'claude-sonnet-4-5',
         provider: 'anthropic',
@@ -149,6 +138,21 @@ describe('Agent', () => {
   });
 
   describe('ready', () => {
+    test('throws error for non-existent model after extensions load', async () => {
+      // Model resolution is deferred to ready() so that extension-provided
+      // providers are available. A model that doesn't exist even after
+      // extensions load should throw here.
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        model: 'model-name',
+        provider: 'fake-provider',
+        token: 'test-token',
+        thinkingLevel: 'off',
+        promptInput: '',
+      });
+
+      await expect(agent.ready()).rejects.toThrow('Model not found');
+    });
+
     test('initializes session and returns self', async () => {
       const agent = createRealAgent();
       const result = await agent.ready();

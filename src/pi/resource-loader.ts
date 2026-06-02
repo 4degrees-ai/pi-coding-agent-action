@@ -82,19 +82,24 @@ export async function resolveExtensions(
 }
 
 /**
- * Create and configure the resource loader used by the agent session.
+ * Build the resource loader options (without creating or reloading the loader).
  *
- * @param logger  - The Logger to use for logging within the Pi agent.
+ * Useful when the caller needs the options to pass to
+ * `createAgentSessionServices()` instead of creating the loader directly.
+ *
+ * @param logger   - The Logger to use for logging within the Pi agent.
  * @param provider - The platform provider for custom tool operations.
  * @param config   - Optional resource loader config (extensions, builtin toggle,
  *                   diff limits, system prompt override).
- * @returns A fully loaded {@link DefaultResourceLoader} instance.
+ * @returns A promise resolving to the options for `DefaultResourceLoader`
+ *          (minus `cwd`, `agentDir`, and `settingsManager` which are supplied
+ *          by `createAgentSessionServices`).
  */
-export async function getResourceLoader(
+export async function buildResourceLoaderOptions(
   logger: Logger,
   provider: PlatformProvider,
   config?: ResourceLoaderConfig
-): Promise<DefaultResourceLoader> {
+) {
   const extensions = config?.extensions;
   const loadBuiltinExtensions = config?.loadBuiltinExtensions ?? true;
 
@@ -108,15 +113,11 @@ export async function getResourceLoader(
     extensionFactories.unshift(createToolsFactory(provider, config));
   }
 
-  const cwd = config?.cwd ?? process.cwd();
-
-  const loader = new DefaultResourceLoader({
-    cwd,
-    agentDir: getAgentDir(),
+  return {
     extensionFactories,
     additionalExtensionPaths,
     systemPromptOverride: () => config?.systemPrompt ?? SYSTEM_PROMPT,
-    appendSystemPromptOverride: agentsFiles => {
+    appendSystemPromptOverride: (agentsFiles: string[]) => {
       if (agentsFiles.length === 0) {
         return [];
       }
@@ -125,6 +126,30 @@ export async function getResourceLoader(
     // Disable theme loading in headless/non-interactive environments
     // (GitHub Actions CI and test environments don't need UI themes)
     noThemes: true,
+  };
+}
+
+/**
+ * Create and configure the resource loader used by the agent session.
+ *
+ * @param logger   - The Logger to use for logging within the Pi agent.
+ * @param provider - The platform provider for custom tool operations.
+ * @param config   - Optional resource loader config (extensions, builtin toggle,
+ *                   diff limits, system prompt override).
+ * @returns A fully loaded {@link DefaultResourceLoader} instance.
+ */
+export async function getResourceLoader(
+  logger: Logger,
+  provider: PlatformProvider,
+  config?: ResourceLoaderConfig
+): Promise<DefaultResourceLoader> {
+  const options = await buildResourceLoaderOptions(logger, provider, config);
+  const cwd = config?.cwd ?? process.cwd();
+
+  const loader = new DefaultResourceLoader({
+    ...options,
+    cwd,
+    agentDir: getAgentDir(),
   });
   await loader.reload();
   return loader;

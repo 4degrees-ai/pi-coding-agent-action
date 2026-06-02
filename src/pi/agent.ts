@@ -4,10 +4,20 @@
  * Provides the `Agent` class that wraps the Pi SDK, handling model resolution,
  * authentication, agent session creation, and prompt execution. Designed for
  * headless / non-interactive use inside GitHub Actions.
+ *
+ * Model resolution is intentionally deferred from the constructor to
+ * {@link ready} so that extensions (which may register custom providers and
+ * models) are loaded before the lookup occurs.
  */
 
-import { AuthStorage, createAgentSession, ModelRegistry } from '@earendil-works/pi-coding-agent';
-import { getResourceLoader } from './resource-loader';
+import {
+  AuthStorage,
+  createAgentSessionFromServices,
+  createAgentSessionServices,
+  ModelRegistry,
+  SessionManager,
+} from '@earendil-works/pi-coding-agent';
+import { buildResourceLoaderOptions } from './resource-loader';
 import { getPiVersion } from '../version';
 
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
@@ -30,7 +40,7 @@ import type { PlatformProvider } from '../platform';
  * execution into a simple interface: construct → {@link ready} → {@link run}.
  */
 export class Agent {
-  private model: Model<Api>;
+  private model!: Model<Api>;
   private authStorage: AuthStorage = AuthStorage.create();
   private modelRegistry: ModelRegistry;
   private session!: AgentSession;
@@ -44,11 +54,14 @@ export class Agent {
   /**
    * Create a new Pi agent.
    *
-   * @param core              - The CoreAdapter for logging and debug output.
+   * Model resolution is deferred to {@link ready} so that extensions loaded
+   * during session-service creation can register custom providers/models
+   * before the lookup occurs.
+   *
+   * @param logger            - Logger for debug/info output.
    * @param platformProvider  - The platform provider for custom tool operations.
    * @param config            - The action configuration.
    * @param events            - Optional streaming event callbacks.
-   * @throws {Error} If the requested model cannot be found in the registry.
    */
   constructor(
     logger: Logger,
@@ -75,46 +88,69 @@ export class Agent {
       this.logger.debug(`[provider] Overriding base URL for ${config.provider}: ${config.baseUrl}`);
       this.modelRegistry.registerProvider(config.provider, { baseUrl: config.baseUrl });
     }
-
-    const foundModel = this.modelRegistry.find(config.provider, config.model);
-
-    if (foundModel) {
-      this.model = foundModel;
-    } else {
-      throw new Error(
-        `Model not found: ${config.provider}/${config.model}. ` +
-          `Please check that the \`provider\` and \`model\` inputs are correct and that the provider is supported. ` +
-          `See https://github.com/shaftoe/pi-coding-agent-action#usage for details.`
-      );
-    }
   }
 
   /**
    * Initialise the underlying agent session and subscribe to streaming events.
    *
+   * Uses the SDK's two-phase session creation:
+   *   1. `createAgentSessionServices` — loads extensions (which may register
+   *      custom providers/models into the model registry).
+   *   2. `createAgentSessionFromServices` — resolves the model against the
+   *      now-populated registry and creates the session.
+   *
    * Text deltas are collected into an internal buffer that is returned by
-   * {@link prompt}. Thinking deltas are written to `stdout` in real time.
+   * {@link run}. Thinking deltas are written to `stdout` in real time.
    *
    * @returns The agent instance itself, for chaining.
+   * @throws {Error} If the requested model cannot be found in the registry
+   *                  (after extensions have been loaded).
    */
   async ready(): Promise<Agent> {
     const loaderConfig: ResourceLoaderConfig = this.config;
-    const resourceLoader = await getResourceLoader(
+    const resourceLoaderOptions = await buildResourceLoaderOptions(
       this.logger,
       this.platformProvider,
       loaderConfig
     );
 
-    // Extract loadedTools early so we can pass it to createAgentSession and
-    // reuse it for post-creation validation without repeated non-null assertions.
-    const loadedTools = this.config.loadedTools;
-
-    const { session } = await createAgentSession({
-      model: this.model,
-      thinkingLevel: this.thinkingLevel,
+    // Phase 1: Create services (loads extensions, registers providers).
+    const services = await createAgentSessionServices({
+      cwd: this.config.cwd ?? process.cwd(),
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
-      resourceLoader,
+      resourceLoaderOptions,
+    });
+
+    // Log any non-fatal diagnostics from service creation.
+    for (const diagnostic of services.diagnostics) {
+      if (diagnostic.type === 'error') {
+        this.logger.error(`[services] ${diagnostic.message}`);
+      } else if (diagnostic.type === 'warning') {
+        this.logger.warning(`[services] ${diagnostic.message}`);
+      }
+    }
+
+    // Resolve the model AFTER extensions have loaded — extensions that call
+    // pi.registerProvider() will have populated the model registry by now.
+    const foundModel = this.modelRegistry.find(this.config.provider, this.config.model);
+    if (foundModel) {
+      this.model = foundModel;
+    } else {
+      throw new Error(
+        `Model not found: ${this.config.provider}/${this.config.model}. ` +
+          `Please check that the \`provider\` and \`model\` inputs are correct and that the provider is supported. ` +
+          `See https://github.com/shaftoe/pi-coding-agent-action#usage for details.`
+      );
+    }
+
+    // Phase 2: Create the session with the resolved model.
+    const loadedTools = this.config.loadedTools;
+    const { session } = await createAgentSessionFromServices({
+      services,
+      sessionManager: SessionManager.inMemory(services.cwd),
+      model: this.model,
+      thinkingLevel: this.thinkingLevel,
       // Pass loadedTools as the SDK's native allowlist (tools option).
       // Unknown tool names are silently ignored by the SDK, so we validate
       // after session creation below.
