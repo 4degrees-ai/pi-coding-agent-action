@@ -1,6 +1,7 @@
 {
   "entry": ["src/index.ts"],
-  "ignorePatterns": ["dist/**", "coverage/**", "node_modules/**"],
+  "ignorePatterns": ["dist/**", "coverage/**", "node_modules/**", "scripts/**", "src/import-meta-url.js", "src/lib/keep-a-changelog.js"],
+  "ignoreDependencies": ["@alexanderfortin/semantic-release-keep-a-changelog"],
   "rules": {
     "unused-exports": "warn",
     "unused-files": "warn",
