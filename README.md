@@ -6,31 +6,6 @@ A CI/CD action that integrates [Pi coding agent](https://pi.dev) with git hostin
 
 Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 
-## Bundling
-
-The action is bundled into a single `dist/index.js` via [esbuild](https://esbuild.github.io/) so no `node_modules` are needed at runtime. Non-code Pi SDK assets (HTML templates, theme JSON) are copied to `dist/pi-sdk/` and resolved via the `PI_PACKAGE_DIR` environment variable.
-
-Dependencies (including Pi itself) are [updated regularly](./.github/workflows/daily-deps-update.yml) to keep up with new releases.
-
-### Bundled Dependencies
-
-<!-- DEPS_TABLE_START -->
-
-| Dependency | Version | Description |
-|---|---|---|
-| `@actions/core` | `3.0.1` | GitHub Actions core I/O (inputs, outputs, logging) |
-| `@actions/github` | `9.1.1` | GitHub API client (Octokit wrapper) |
-| `@earendil-works/pi-coding-agent` | `0.78.0` | Pi SDK — AI coding agent runtime |
-| `@js-temporal/polyfill` | `0.5.1` | Temporal API polyfill |
-| `ignore` | `7.0.5` | `.gitignore`-style pattern matching |
-
-<!-- DEPS_TABLE_END -->
-
-> _This table is auto-updated by the [`package.yml`](./.github/workflows/package.yml) workflow whenever dependencies change._
-
-> [!NOTE]
-> If you don't want to use latest and greatest dependencies, pin the action to a specific release, e.g. `uses: shaftoe/pi-coding-agent-action@v2.0.0`
-
 ## Features
 
 - **Issue assistance**: Prefix any new issue description and/or any issue comment with `/pi` to have the agent analyze the issue, generate a report and/or create a new PR with the fix
@@ -74,6 +49,29 @@ Refer to [the official Pi documentation](https://github.com/badlogic/pi-mono/tre
 > ```yaml
 >    uses: shaftoe/pi-coding-agent-action@v2.19.0
 > ```
+
+## Bundled Dependencies
+
+The action is bundled into a single `dist/index.js` via [esbuild](https://esbuild.github.io/) so no `node_modules` are needed at runtime. Non-code Pi SDK assets (HTML templates, theme JSON) are copied to `dist/pi-sdk/` and resolved via the `PI_PACKAGE_DIR` environment variable.
+
+Dependencies (including Pi itself) are [updated regularly](./.github/workflows/daily-deps-update.yml) to keep up with new releases.
+
+<!-- DEPS_TABLE_START -->
+
+| Dependency | Version | Description |
+|---|---|---|
+| `@actions/core` | `3.0.1` | GitHub Actions core I/O (inputs, outputs, logging) |
+| `@actions/github` | `9.1.1` | GitHub API client (Octokit wrapper) |
+| `@earendil-works/pi-coding-agent` | `0.78.0` | Pi SDK — AI coding agent runtime |
+| `@js-temporal/polyfill` | `0.5.1` | Temporal API polyfill |
+| `ignore` | `7.0.5` | `.gitignore`-style pattern matching |
+
+<!-- DEPS_TABLE_END -->
+
+> _This table is auto-updated by the [`package.yml`](./.github/workflows/package.yml) workflow whenever dependencies change._
+
+> [!NOTE]
+> If you don't want to use latest and greatest dependencies, pin the action to a specific release, e.g. `uses: shaftoe/pi-coding-agent-action@v2.0.0`
 
 ## Usage
 
