@@ -22,7 +22,7 @@ import type { Agent } from '../../src/pi/agent.js';
 import type { PlatformProvider } from '../../src/platform';
 
 // E2E tests involve real LLM API calls — give them a generous timeout.
-const E2E_TIMEOUT = 10_000;
+const E2E_TIMEOUT = 60_000;
 
 // ============================================================================
 // Build-time constants (normally injected by esbuild define)

@@ -37,7 +37,7 @@ import { describe, expect, test, mock } from 'bun:test';
 import { resolve } from 'node:path';
 import type { PlatformProvider } from '../../src/platform';
 
-const E2E_TIMEOUT = 15_000;
+const E2E_TIMEOUT = 60_000;
 
 // ============================================================================
 // Mock GitHub Dependencies
