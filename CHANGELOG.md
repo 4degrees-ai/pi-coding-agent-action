@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.1] - 2026-06-03
+
+### Changed
+
+- add deps versions to readme, update package workflow
+- add warning about GITHUB_TOKEN limitation for .github/workflows (#256)
+- ensure all deps are show in readme
+- move PI_PACKAGE_DIR env var handling from Agent to action adapter
+- note that Pi is bundled and deps update daily (#253)
+- **README.md**: remove hallucination (#257)
+- update readme
+
+### Fixed
+
+- **comments**: abs() possible negative costs (#254)
+
 ## [2.19.0] - 2026-06-02
 
 ### Added
@@ -407,7 +423,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.1...HEAD
+[2.19.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.0...v2.19.1
 [2.19.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.18.0...v2.19.0
 [2.18.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.1...v2.18.0
 [2.17.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.0...v2.17.1
