@@ -253,41 +253,16 @@ export class Agent {
    * Uses the Pi SDK's built-in HTML export (same renderer as `/share`).
    * Must be called after {@link run} so the session has content.
    *
-   * When the action runs from its bundled `dist/index.js`, the SDK's
-   * `getPackageDir()` walks up from `__dirname` and finds the action's
-   * `package.json` instead of the SDK's. Setting `PI_PACKAGE_DIR` tells
-   * the SDK where its own package root is so it can locate template files
-   * like `dist/core/export-html/template.html`.
+   * NOTE: When running from a bundled deployment (e.g. GitHub Action's
+   * `dist/index.js`), the SDK's `getPackageDir()` may not find its own
+   * `package.json`. The caller (adapter) is responsible for setting
+   * `PI_PACKAGE_DIR` before calling this method if needed.
    *
    * @param outputPath - Path to write the HTML file to.
    * @returns The path to the written file.
    */
   async exportSessionHtml(outputPath: string): Promise<string> {
-    // When the action runs from its bundled dist/index.js, the SDK's
-    // getPackageDir() walks up from __dirname and finds the action's
-    // package.json instead of the SDK's. The build script copies the SDK's
-    // export-html assets into dist/pi-sdk/, and we point the SDK there via
-    // PI_PACKAGE_DIR (its supported escape hatch for bundled deployments).
-    //
-    // When config.packageDir is set, it is used as PI_PACKAGE_DIR;
-    // otherwise no env-var manipulation is performed (the SDK resolves
-    // its own package directory).
-    const pkgDir = this.config.packageDir;
-    if (!pkgDir) {
-      return await this.session.exportToHtml(outputPath);
-    }
-
-    const previousPiPackageDir = process.env.PI_PACKAGE_DIR;
-    try {
-      process.env.PI_PACKAGE_DIR = pkgDir;
-      return await this.session.exportToHtml(outputPath);
-    } finally {
-      if (previousPiPackageDir !== undefined) {
-        process.env.PI_PACKAGE_DIR = previousPiPackageDir;
-      } else {
-        delete process.env.PI_PACKAGE_DIR;
-      }
-    }
+    return this.session.exportToHtml(outputPath);
   }
 
   /**

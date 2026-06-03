@@ -204,8 +204,13 @@ export interface PiConfig extends DiffConfig {
   systemPrompt?: string;
   /**
    * Override the directory where the Pi SDK looks for package assets
-   * (e.g. export templates). When set, `PI_PACKAGE_DIR` is pointed here
-   * before export operations.
+   * (e.g. export templates). When set, the action adapter temporarily
+   * sets `PI_PACKAGE_DIR` to this path during HTML export so the SDK's
+   * `getPackageDir()` resolves correctly in bundled deployments.
+   *
+   * Only needed by the GitHub Action frontend. Library / CLI / web app
+   * frontends should leave this unset — the SDK resolves its own package
+   * directory when running from a standard `node_modules/` layout.
    */
   packageDir?: string;
   /** Working directory. Defaults to `process.cwd()`. */
