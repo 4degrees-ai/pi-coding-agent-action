@@ -20,90 +20,86 @@ const MARKER_START = '<!-- DEPS_TABLE_START -->';
 const MARKER_END = '<!-- DEPS_TABLE_END -->';
 
 interface DepInfo {
-	name: string;
-	version: string;
-	description: string;
+  name: string;
+  version: string;
+  description: string;
 }
 
 /** Friendly descriptions for known dependencies */
 const DEP_DESCRIPTIONS: Record<string, string> = {
-	'@earendil-works/pi-coding-agent': 'Pi SDK — AI coding agent runtime',
-	'@actions/core': 'GitHub Actions core I/O (inputs, outputs, logging)',
-	'@actions/github': 'GitHub API client (Octokit wrapper)',
-	'@js-temporal/polyfill': 'Temporal API polyfill',
-	ignore: '`.gitignore`-style pattern matching',
+  '@earendil-works/pi-coding-agent': 'Pi SDK — AI coding agent runtime',
+  '@actions/core': 'GitHub Actions core I/O (inputs, outputs, logging)',
+  '@actions/github': 'GitHub API client (Octokit wrapper)',
+  '@js-temporal/polyfill': 'Temporal API polyfill',
+  ignore: '`.gitignore`-style pattern matching',
 };
 
 function getResolvedVersion(depName: string): string {
-	// Handle scoped packages: @scope/name → @scope/name/package.json
-	const pkgPath = join(NODE_MODULES_DIR, depName, 'package.json');
-	if (!existsSync(pkgPath)) {
-		return '—';
-	}
-	try {
-		const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-		return pkg.version ?? '—';
-	} catch {
-		return '—';
-	}
+  // Handle scoped packages: @scope/name → @scope/name/package.json
+  const pkgPath = join(NODE_MODULES_DIR, depName, 'package.json');
+  if (!existsSync(pkgPath)) {
+    return '—';
+  }
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return pkg.version ?? '—';
+  } catch {
+    return '—';
+  }
 }
 
 function generateTable(deps: DepInfo[]): string {
-	const header = `| Dependency | Version | Description |`;
-	const separator = `|---|---|---|`;
-	const rows = deps.map(
-		(d) => `| \`${d.name}\` | \`${d.version}\` | ${d.description} |`,
-	);
-	return [header, separator, ...rows].join('\n');
+  const header = `| Dependency | Version | Description |`;
+  const separator = `|---|---|---|`;
+  const rows = deps.map(d => `| \`${d.name}\` | \`${d.version}\` | ${d.description} |`);
+  return [header, separator, ...rows].join('\n');
 }
 
 function main(): void {
-	if (!existsSync(README_PATH)) {
-		console.error(`README not found at ${README_PATH}`);
-		process.exit(1);
-	}
+  if (!existsSync(README_PATH)) {
+    console.error(`README not found at ${README_PATH}`);
+    process.exit(1);
+  }
 
-	if (!existsSync(PACKAGE_JSON_PATH)) {
-		console.error(`package.json not found at ${PACKAGE_JSON_PATH}`);
-		process.exit(1);
-	}
+  if (!existsSync(PACKAGE_JSON_PATH)) {
+    console.error(`package.json not found at ${PACKAGE_JSON_PATH}`);
+    process.exit(1);
+  }
 
-	// Read runtime dependencies
-	const pkg = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf-8'));
-	const dependencies: Record<string, string> = pkg.dependencies ?? {};
+  // Read runtime dependencies
+  const pkg = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf-8'));
+  const dependencies: Record<string, string> = pkg.dependencies ?? {};
 
-	const deps: DepInfo[] = Object.keys(dependencies)
-		.sort()
-		.map((name) => ({
-			name,
-			version: getResolvedVersion(name),
-			description: DEP_DESCRIPTIONS[name] ?? '',
-		}));
+  const deps: DepInfo[] = Object.keys(dependencies)
+    .sort()
+    .map(name => ({
+      name,
+      version: getResolvedVersion(name),
+      description: DEP_DESCRIPTIONS[name] ?? '',
+    }));
 
-	const table = generateTable(deps);
+  const table = generateTable(deps);
 
-	// Read README and replace between markers
-	const readme = readFileSync(README_PATH, 'utf-8');
-	const startIdx = readme.indexOf(MARKER_START);
-	const endIdx = readme.indexOf(MARKER_END);
+  // Read README and replace between markers
+  const readme = readFileSync(README_PATH, 'utf-8');
+  const startIdx = readme.indexOf(MARKER_START);
+  const endIdx = readme.indexOf(MARKER_END);
 
-	if (startIdx === -1 || endIdx === -1) {
-		console.error(
-			`README.md is missing ${MARKER_START} and/or ${MARKER_END} markers`,
-		);
-		process.exit(1);
-	}
+  if (startIdx === -1 || endIdx === -1) {
+    console.error(`README.md is missing ${MARKER_START} and/or ${MARKER_END} markers`);
+    process.exit(1);
+  }
 
-	const updated =
-		readme.slice(0, startIdx + MARKER_START.length) +
-		'\n\n' +
-		table +
-		'\n\n' +
-		readme.slice(endIdx);
+  const updated =
+    readme.slice(0, startIdx + MARKER_START.length) +
+    '\n\n' +
+    table +
+    '\n\n' +
+    readme.slice(endIdx);
 
-	writeFileSync(README_PATH, updated);
-	console.log('README dependency table updated successfully.');
-	console.log(table);
+  writeFileSync(README_PATH, updated);
+  console.info('README dependency table updated successfully.');
+  console.info(table);
 }
 
 main();

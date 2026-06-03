@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { build, type Plugin } from 'esbuild';
 import { join } from 'node:path';
 
@@ -22,7 +22,7 @@ function patchSDKLoaderPlugin(): Plugin {
   return {
     name: 'patch-sdk-loader',
     setup(build) {
-      build.onLoad({ filter: /extensions\/loader\.js$/ }, async (args) => {
+      build.onLoad({ filter: /extensions\/loader\.js$/ }, async args => {
         const source = readFileSync(args.path, 'utf-8');
 
         // Wrap getAliases() body in try-catch to handle missing node_modules
@@ -41,7 +41,7 @@ function patchSDKLoaderPlugin(): Plugin {
         if (patched === source) {
           console.warn(
             '[patch-sdk-loader] WARNING: getAliases() pattern not matched — patch not applied. ' +
-            'The SDK may have changed. Extension loading may fail in the bundled action.'
+              'The SDK may have changed. Extension loading may fail in the bundled action.'
           );
           return { contents: source, loader: 'js' };
         }
@@ -114,7 +114,7 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
 
 // If run directly, execute the build
 // Bun sets isMain property on the module
-// @ts-ignore - Bun runtime property
+// @ts-expect-error - Bun runtime property
 if (import.meta.main || process.argv[1].endsWith('/package.ts')) {
   buildDist().catch(error => {
     console.error('Build failed:', error);

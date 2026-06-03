@@ -92,6 +92,27 @@ export default [
       ],
     },
   },
+  // Scripts
+  {
+    files: ["scripts/**/*.ts"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+        project: path.join(__dirname, "tsconfig.json"),
+      },
+      globals: {
+        node: true,
+      },
+    },
+    plugins: {
+      "@typescript-eslint": typescriptEslint,
+    },
+    rules: {
+      ...sharedRules,
+    },
+  },
   // Tests
   {
     files: ["tests/**/*.ts"],
