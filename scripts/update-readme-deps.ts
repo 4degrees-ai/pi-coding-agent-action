@@ -27,11 +27,15 @@ interface DepInfo {
 
 /** Friendly descriptions for known dependencies */
 const DEP_DESCRIPTIONS: Record<string, string> = {
+  '@earendil-works/pi-agent-core': 'Pi Agent Core — agent orchestration primitives',
+  '@earendil-works/pi-ai': 'Pi AI — AI model abstractions and providers',
   '@earendil-works/pi-coding-agent': 'Pi SDK — AI coding agent runtime',
   '@actions/core': 'GitHub Actions core I/O (inputs, outputs, logging)',
   '@actions/github': 'GitHub API client (Octokit wrapper)',
   '@js-temporal/polyfill': 'Temporal API polyfill',
+  '@octokit/plugin-rest-endpoint-methods': 'Octokit REST API endpoint methods',
   ignore: '`.gitignore`-style pattern matching',
+  typebox: 'JSON Schema Type Builder',
 };
 
 function getResolvedVersion(depName: string): string {
