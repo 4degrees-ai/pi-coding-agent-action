@@ -1,0 +1,17 @@
+{
+  "entry": ["src/index.ts"],
+  "ignorePatterns": ["dist/**", "coverage/**", "node_modules/**"],
+  "rules": {
+    "unused-exports": "warn",
+    "unused-files": "warn",
+    "unused-types": "warn",
+    "unused-dependencies": "error",
+    "unused-dev-dependencies": "warn",
+    "unused-enum-members": "off",
+    "duplicate-exports": "warn"
+  },
+  "duplicates": {
+    "minLines": 6,
+    "minTokens": 50
+  }
+}

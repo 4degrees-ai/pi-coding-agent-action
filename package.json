@@ -18,7 +18,12 @@
     "validate": "bun run lint && bun run type-check && bun run format",
     "changelog": "bun run scripts/changelog.ts",
     "semantic-release": "semantic-release",
-    "update-readme": "bun run scripts/update-readme-deps.ts"
+    "update-readme": "bun run scripts/update-readme-deps.ts",
+    "fallow": "bunx fallow",
+    "fallow:dead-code": "bunx fallow dead-code",
+    "fallow:dupes": "bunx fallow dupes",
+    "fallow:fix:dry": "bunx fallow fix --dry-run",
+    "fallow:fix": "bunx fallow fix --yes"
   },
   "keywords": [
     "github-action",
@@ -31,9 +36,13 @@
   "dependencies": {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@earendil-works/pi-coding-agent": "0.78.0",
+    "@earendil-works/pi-agent-core": "^0.78.0",
+    "@earendil-works/pi-ai": "^0.78.0",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
     "@js-temporal/polyfill": "^0.5.1",
-    "ignore": "^7.0.5"
+    "@octokit/plugin-rest-endpoint-methods": "^17.0.0",
+    "ignore": "^7.0.5",
+    "typebox": "^1.1.39"
   },
   "devDependencies": {
     "@alexanderfortin/semantic-release-keep-a-changelog": "^0.3.0",
@@ -48,6 +57,7 @@
     "bun-types": "1.3.14",
     "esbuild": "^0.28.0",
     "eslint": "10.4.1",
+    "fallow": "^2.87.0",
     "prettier": "^3.8.3",
     "semantic-release": "^25.0.3",
     "typescript": "^6.0.3"

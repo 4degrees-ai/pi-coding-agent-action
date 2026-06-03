@@ -15,3 +15,5 @@ pre-push:
   commands:
     validate:
       run: bun run validate
+    fallow:
+      run: bunx fallow dead-code --changed-since origin/develop --format compact

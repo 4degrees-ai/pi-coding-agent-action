@@ -48,3 +48,13 @@ The action uses a **testable adapter pattern** to separate business logic from e
 6. **Test Coverage**: The project uses `bun test` for testing. Maintain and expand test coverage when making changes. Focus on behavior verification, not implementation details.
 
 7. **Prefer Bun package manager over npm or others**
+
+8. **Fallow (codebase intelligence)**: The project uses [Fallow](https://docs.fallow.tools/) for dead code detection, duplication analysis, and complexity hotspot tracking. Key scripts:
+   - `bun run fallow` — run all analyses
+   - `bun run fallow:dead-code` — find unused exports, files, types, deps
+   - `bun run fallow:dupes` — detect code duplication
+   - `bun run fallow:fix:dry` — preview auto-fix for unused exports/deps
+   - `bun run fallow:fix` — apply auto-fix
+   - Config is in `.fallowrc.json`
+   - CI runs on every PR via `.github/workflows/fallow.yml` (SARIF + PR comments, non-blocking)
+   - Lefthook runs `fallow dead-code --changed-since origin/develop` on pre-push
