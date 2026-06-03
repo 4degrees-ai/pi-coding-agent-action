@@ -35,6 +35,9 @@ jobs:
       - name: Build dist
         run: bun run package
 
+      - name: Update dependency versions in README
+        run: bun run update-readme
+
       - name: Check for changes
         id: check_changes
         run: |
