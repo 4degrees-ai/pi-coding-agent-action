@@ -1,4 +1,4 @@
- 
+
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
 
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
@@ -315,8 +315,29 @@ describe('createFinalComment', () => {
 
     const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
     const commentBody = (call[0] as { body: string }).body;
-    expect(commentBody).toContain('Tokens: 1.5K');
-    expect(commentBody).toContain('Cost: $0.0123');
+    expect(commentBody).toContain('Tokens: 1.5K ');
+    expect(commentBody).toContain('Cost: $0.01 ');
+  });
+
+  test('includes session stats with token usage (rounds up)', async () => {
+    const deps = createTestDeps();
+    const body = 'Test result';
+    const metadata = {
+      sessionStats: {
+        inputTokens: 2000,
+        outputTokens: 0,
+        totalTokens: 2000,
+        cost: 0.0153,
+        version: '1.0.0',
+      },
+    };
+
+    await createFinalComment(deps, body, metadata);
+
+    const call = (deps.octokit.rest.issues.createComment as any).mock.calls[0] as unknown[];
+    const commentBody = (call[0] as { body: string }).body;
+    expect(commentBody).toContain('Tokens: 2.0K ');
+    expect(commentBody).toContain('Cost: $0.02 ');
   });
 
   test('handles zero session stats', async () => {

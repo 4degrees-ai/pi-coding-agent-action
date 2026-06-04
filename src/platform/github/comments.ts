@@ -210,7 +210,7 @@ export async function createFinalComment(
       const sessionCost = Math.abs(cost);
 
       if (sessionCost > 0) {
-        metadataParts.push(`Cost: $${sessionCost.toFixed(4)}`);
+        metadataParts.push(`Cost: $${sessionCost.toFixed(2)}`);
       }
     }
 
