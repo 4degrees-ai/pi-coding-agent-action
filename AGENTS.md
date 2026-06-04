@@ -45,7 +45,9 @@ Monorepo managed with Bun workspaces (`packages/*`):
 
 7. **Prefer Bun package manager** over npm or others.
 
-8. **Fallow (codebase intelligence)**: The project uses [Fallow](https://docs.fallow.tools/) for dead code detection, duplication analysis, and complexity hotspot tracking. Key scripts:
+8. **Do not edit `CHANGELOG.md`**: Changelog updates are automated as part of the release workflow. Never add, modify, or remove entries from `CHANGELOG.md` in PRs — they will be generated at release time.
+
+9. **Fallow (codebase intelligence)**: The project uses [Fallow](https://docs.fallow.tools/) for dead code detection, duplication analysis, and complexity hotspot tracking. Key scripts:
    - `bun run fallow` — run all analyses
    - `bun run fallow:dead-code` — find unused exports, files, types, deps
    - `bun run fallow:dupes` — detect code duplication
