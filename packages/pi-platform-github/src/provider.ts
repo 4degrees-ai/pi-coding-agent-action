@@ -6,10 +6,9 @@
  * GitHub-compatible REST APIs and the same CI/CD environment variables
  * (GITHUB_* env vars), so a single implementation covers all of them.
  *
- * Platform detection is based on the GITHUB_SERVER_URL environment variable:
- * - https://github.com → 'github'
- * - https://codeberg.org → 'codeberg'
- * - Anything else → throws an error (unsupported platform)
+ * Platform detection is performed by the pure `detectPlatform(serverUrl)`
+ * function, which is invoked at the call site (e.g. in `pi-action/run.ts`).
+ * Library code does not read environment variables directly.
  */
 
 import { addReaction, deleteReaction } from './reactions';
@@ -43,19 +42,18 @@ import type {
 } from './tools/get-workflow-run-logs';
 
 /**
- * Detect the current platform based on the server URL.
+ * Detect the current platform based on a server URL.
  *
+ * Pure function — no environment access. Callers (typically the action/
+ * CLI entry point) are responsible for reading the URL from the
+ * appropriate source (e.g. `github.context.serverUrl`) and passing it in.
+ *
+ * @param serverUrl - The platform server URL (e.g. 'https://github.com').
  * @returns The detected platform type.
  */
-export function detectPlatform(explicitType?: PlatformType): PlatformType {
-  // When an explicit type is provided, skip env-var detection.
-  if (explicitType) {
-    return explicitType;
-  }
-
-  const serverUrl = process.env.GITHUB_SERVER_URL;
+export function detectPlatform(serverUrl: string): PlatformType {
   if (!serverUrl) {
-    throw new Error('GITHUB_SERVER_URL environment variable is not set. Cannot detect platform.');
+    throw new Error('detectPlatform requires a server URL, got an empty string.');
   }
 
   // Check for known Forgejo/Gitea indicators
@@ -98,9 +96,11 @@ export interface GitHubPlatformDeps {
    */
   trigger?: string;
   /**
-   * Override platform detection. When omitted, detected from GITHUB_SERVER_URL.
+   * Explicit platform type. Required — library code does not read
+   * environment variables. Use `detectPlatform(context.serverUrl)` at
+   * the call site to derive it from the server URL.
    */
-  platformType?: PlatformType;
+  platformType: PlatformType;
   /**
    * Branch name template for generating branch names in pull-request creation.
    * When omitted, uses the default template.
@@ -119,7 +119,7 @@ export interface GitHubPlatformDeps {
  * @returns A PlatformProvider instance.
  */
 export function createGitHubPlatformProvider(deps: GitHubPlatformDeps): PlatformProvider {
-  const type = detectPlatform(deps.platformType);
+  const type = deps.platformType;
 
   // Use the provided deps directly — no fallbacks
   const resolvedContext = deps.context;

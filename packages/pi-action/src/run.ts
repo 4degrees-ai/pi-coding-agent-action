@@ -14,7 +14,7 @@ import { RealGitAdapter } from './adapters/git-adapter';
 import { createRealPiAgent } from './adapters/pi-agent-adapter';
 import { gatherActionsConfig } from './adapters/config';
 import { ActionsOutputSink } from './adapters/output-sink';
-import { createGitHubPlatformProvider } from '@alexanderfortin/pi-platform-github';
+import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/pi-platform-github';
 
 /**
  * Run the Pi coding agent end-to-end.
@@ -54,6 +54,7 @@ export async function run() {
     octokit,
     context: platformContext,
     logger: coreAdapter,
+    platformType: detectPlatform(platformContext.serverUrl),
     ...(triggerValue ? { trigger: triggerValue } : {}),
     ...(branchNameTemplate ? { branchNameTemplate } : {}),
   });
