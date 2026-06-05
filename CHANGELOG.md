@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.3] - 2026-06-05
+
+### Changed
+
+- add badges because why not
+- fallow driven cleanups
+- fallow driven cleanups
+- fallow driven cleanups
+- update readme
+
+### Fixed
+
+- add missing trailing space to /pi trigger
+- improve action version management
+- update readme-update script for mono repo compatibility
+
 ## [2.19.2] - 2026-06-05
 
 ### Changed
@@ -440,7 +456,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.2...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.3...HEAD
+[2.19.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.2...v2.19.3
 [2.19.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.1...v2.19.2
 [2.19.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.0...v2.19.1
 [2.19.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.18.0...v2.19.0
