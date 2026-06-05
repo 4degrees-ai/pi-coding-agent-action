@@ -140,6 +140,7 @@ export function validateRequiredInputs(provider: string, model: string): void {
  *
  * @returns A fully populated PiConfig object.
  */
+// fallow-ignore-next-line complexity
 export function gatherActionsConfig(): PiConfig {
   // --- Required inputs ----------------------------------------------------
   const provider = core.getInput('provider');

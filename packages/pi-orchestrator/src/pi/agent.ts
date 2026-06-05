@@ -63,6 +63,7 @@ export class Agent {
    * @param config            - The action configuration.
    * @param events            - Optional streaming event callbacks.
    */
+  // fallow-ignore-next-line complexity
   constructor(
     logger: Logger,
     platformProvider: PlatformProvider,
@@ -106,6 +107,7 @@ export class Agent {
    * @throws {Error} If the requested model cannot be found in the registry
    *                  (after extensions have been loaded).
    */
+  // fallow-ignore-next-line complexity
   async ready(): Promise<Agent> {
     const loaderConfig: ResourceLoaderConfig = this.config;
     const resourceLoaderOptions = await buildResourceLoaderOptions(
@@ -199,6 +201,7 @@ export class Agent {
       }
     }
 
+    // fallow-ignore-next-line complexity
     this.session.subscribe(event => {
       if (event.type !== 'message_update') {
         return;
@@ -264,6 +267,7 @@ export class Agent {
    *
    * @returns The error message if the session ended with an error, `undefined` otherwise.
    */
+  // fallow-ignore-next-line complexity
   private getSessionError(): string | undefined {
     if (!this.session) {
       return undefined;

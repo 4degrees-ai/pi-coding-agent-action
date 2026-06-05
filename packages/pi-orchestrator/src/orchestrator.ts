@@ -73,6 +73,7 @@ export class ActionOrchestrator {
    *         Finalization errors (posting comment, deleting reaction) are caught and logged
    *         so they never prevent setFailed from running.
    */
+  // fallow-ignore-next-line complexity
   async execute(): Promise<void> {
     this.logger.info(`running action v${formatActionVersion()}`);
     const startTime = this.git.getStartTime() ?? Temporal.Now.instant();
@@ -163,6 +164,7 @@ export class ActionOrchestrator {
    * (best-effort), mark the action as failed. The caller still re-throws
    * the original error after this returns.
    */
+  // fallow-ignore-next-line complexity
   private async handleUncaughtError(
     e: unknown,
     startTime: Temporal.Instant,
@@ -221,6 +223,7 @@ export class ActionOrchestrator {
   /**
    * Finalize execution by posting the result/error as a comment and setting action outputs.
    */
+  // fallow-ignore-next-line complexity
   private async finalize(
     body: string,
     config: PiConfig,

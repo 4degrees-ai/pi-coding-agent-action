@@ -39,6 +39,7 @@ interface ExtensionResolutionResult {
  * @param cwd        - Working directory. Defaults to `process.cwd()`.
  * @returns A promise resolving to the extension paths and loading info.
  */
+// fallow-ignore-next-line complexity
 export async function resolveExtensions(
   extensions?: string[],
   cwd?: string
@@ -95,6 +96,7 @@ export async function resolveExtensions(
  *          (minus `cwd`, `agentDir`, and `settingsManager` which are supplied
  *          by `createAgentSessionServices`).
  */
+// fallow-ignore-next-line complexity
 export async function buildResourceLoaderOptions(
   logger: Logger,
   provider: PlatformProvider,

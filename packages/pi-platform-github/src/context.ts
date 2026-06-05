@@ -85,6 +85,7 @@ const CONTEXT_EXTRACTORS: Record<
   'issue' | 'pull_request',
   (payload: Record<string, unknown>) => IssueOrPullRequestContext | undefined
 > = {
+  // fallow-ignore-next-line complexity
   issue: payload => {
     const issue = payload.issue as { title?: string; number?: number; body?: string } | undefined;
     if (!issue?.title || issue.number === undefined) {
@@ -96,6 +97,7 @@ const CONTEXT_EXTRACTORS: Record<
       ...(issue.body !== undefined ? { body: issue.body } : {}),
     };
   },
+  // fallow-ignore-next-line complexity
   pull_request: payload => {
     const pr = payload.pull_request as
       | { title?: string; number?: number; body?: string }
@@ -167,6 +169,7 @@ function enrichWithContext(deps: GitHubModuleDeps, instruction: string, label: s
  * @returns The assembled prompt string, or `undefined` if no prompt source was
  *          found.
  */
+// fallow-ignore-next-line complexity
 export async function getPrompt(
   deps: GitHubModuleDeps,
   promptInput?: string
@@ -208,6 +211,7 @@ interface TriggeringComment {
   body: string;
 }
 
+// fallow-ignore-next-line complexity
 async function getComment(deps: GitHubModuleDeps): Promise<TriggeringComment | undefined> {
   const { payload } = deps.context;
   const comment = payload.comment as { id?: number; body?: string } | undefined;

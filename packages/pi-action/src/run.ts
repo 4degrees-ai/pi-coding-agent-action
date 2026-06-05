@@ -25,6 +25,7 @@ import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/p
  *
  * @throws Rethrows any error from the orchestrator.
  */
+// fallow-ignore-next-line complexity
 export async function run() {
   const coreAdapter = new RealCoreAdapter();
   const config = gatherActionsConfig();

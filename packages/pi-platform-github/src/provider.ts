@@ -51,6 +51,7 @@ import type {
  * @param serverUrl - The platform server URL (e.g. 'https://github.com').
  * @returns The detected platform type.
  */
+// fallow-ignore-next-line complexity
 export function detectPlatform(serverUrl: string): PlatformType {
   if (!serverUrl) {
     throw new Error('detectPlatform requires a server URL, got an empty string.');

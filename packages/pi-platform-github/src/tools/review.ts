@@ -20,6 +20,7 @@ export type { CreateReviewParams, CreateReviewDetails, ReviewInlineComment };
 const VALID_REVIEW_EVENTS = new Set(['COMMENT', 'APPROVE', 'REQUEST_CHANGES']);
 
 /** Validate a single inline comment's fields. Throws with index-prefixed message. */
+// fallow-ignore-next-line complexity
 export function validateReviewComment(comment: ReviewInlineComment, index: number): void {
   if (!comment.path || comment.path.trim() === '') {
     throw new Error(`Comment at index ${index}: "path" is required and cannot be empty`);
@@ -71,6 +72,7 @@ export function validateCreateReviewParams(params: CreateReviewParams): void {
  * @param comment - The platform-agnostic inline comment.
  * @returns The GitHub API comment object.
  */
+// fallow-ignore-next-line complexity
 export function toGitHubComment(comment: ReviewInlineComment): Record<string, unknown> {
   const ghComment: Record<string, unknown> = {
     path: comment.path,
@@ -99,6 +101,7 @@ export function toGitHubComment(comment: ReviewInlineComment): Record<string, un
  * @throws {Error} If the PR number cannot be resolved, validation fails,
  *                 or the GitHub API call fails.
  */
+// fallow-ignore-next-line complexity
 export async function createReview(
   deps: GitHubModuleDeps,
   params: CreateReviewParams

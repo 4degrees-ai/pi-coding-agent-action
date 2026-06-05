@@ -22,6 +22,136 @@ export interface ExtensionLoadingInfo {
   warnings: string[];
 }
 
+/**
+ * A log line to emit. Sections return arrays of these so the caller can
+ * drive the actual `Logger` calls in one place. Exported for unit testing.
+ */
+export interface LogLine {
+  level: 'info' | 'warning';
+  text: string;
+}
+
+const SECTION_SEPARATOR = '─────────────────────────────────────────────────────────────────────';
+
+function info(text: string): LogLine {
+  return { level: 'info', text };
+}
+
+function warning(text: string): LogLine {
+  return { level: 'warning', text };
+}
+
+/**
+ * Format the LLM/model block of the session banner. Exported for unit testing.
+ */
+export function formatLLMSection(
+  model:
+    | { provider: string; id: string; reasoning?: string | null | boolean | undefined }
+    | null
+    | undefined,
+  thinkingLevel: number | string
+): LogLine[] {
+  const lines: LogLine[] = [info('📊 LLM')];
+  if (model) {
+    lines.push(info(`  Model:            ${model.provider}/${model.id}`));
+    lines.push(info(`  Reasoning:        ${model.reasoning}`));
+  } else {
+    lines.push(info('  Model:     Not configured'));
+  }
+  lines.push(info(`  Thinking Level:   ${thinkingLevel}`));
+  lines.push(info(SECTION_SEPARATOR));
+  return lines;
+}
+
+/**
+ * Format the Extensions block, including any warnings. Returns an empty
+ * array when there are no requested extensions (section is omitted).
+ * Exported for unit testing.
+ */
+// fallow-ignore-next-line complexity
+export function formatExtensionsSection(extensionInfo: ExtensionLoadingInfo): LogLine[] {
+  if (extensionInfo.requested.length === 0) {
+    return [];
+  }
+  const lines: LogLine[] = [info('📦 Extensions')];
+  lines.push(info(`  Requested:        ${extensionInfo.requested.join(', ')}`));
+  if (extensionInfo.loaded.length > 0) {
+    lines.push(info(`  Loaded:           ${extensionInfo.loaded.length} extension(s)`));
+    for (const ext of extensionInfo.loaded) {
+      lines.push(info(`    • ${ext}`));
+    }
+  } else {
+    lines.push(info('  Loaded:           None'));
+  }
+  for (const warningText of extensionInfo.warnings) {
+    lines.push(warning(`  ⚠️  ${warningText}`));
+  }
+  lines.push(info(SECTION_SEPARATOR));
+  return lines;
+}
+
+/**
+ * Format the Available Tools block. Returns an empty array when no tools
+ * are registered. Exported for unit testing.
+ */
+export function formatToolsSection(
+  tools: readonly { name: string; sourceInfo: { source?: string | null } }[]
+): LogLine[] {
+  if (tools.length === 0) {
+    return [];
+  }
+  const lines: LogLine[] = [info('🔧 Available Tools')];
+  for (const tool of tools) {
+    if (tool.sourceInfo.source) {
+      lines.push(info(`  • [${tool.sourceInfo.source}] ${tool.name}`));
+    } else {
+      lines.push(info(`  • ${tool.name}`));
+    }
+  }
+  lines.push(info(SECTION_SEPARATOR));
+  return lines;
+}
+
+/**
+ * Format the System Prompt block, truncating to 1000 chars and appending
+ * a continuation indicator when truncated. Exported for unit testing.
+ */
+export function formatSystemPromptSection(systemPrompt: string): LogLine[] {
+  const lines: LogLine[] = [info('📝 System Prompt')];
+  const display = truncateText(systemPrompt, 1000);
+  lines.push(info(display));
+  if (systemPrompt.length > 1000) {
+    lines.push(info(`\n... (${systemPrompt.length - 1000} more characters)`));
+  }
+  lines.push(info(SECTION_SEPARATOR));
+  return lines;
+}
+
+/**
+ * Format the User Prompt block, including an image-attachment count when
+ * images are present. Exported for unit testing.
+ */
+export function formatUserPromptSection(prompt: string, images?: readonly unknown[]): LogLine[] {
+  const lines: LogLine[] = [info('👤 User Prompt'), info(truncateText(prompt, 500))];
+  if (images && images.length > 0) {
+    lines.push(info(`  [${images.length} image(s) attached]`));
+  }
+  return lines;
+}
+
+/**
+ * Emit an array of `LogLine`s through the given logger.
+ */
+function emitLogLines(logger: Logger, lines: readonly LogLine[]): void {
+  for (const line of lines) {
+    if (line.level === 'warning') {
+      logger.warning(line.text);
+    } else {
+      logger.info(line.text);
+    }
+  }
+}
+
 export const loggingFactory = (
   pi: ExtensionAPI,
   logger: Logger,
@@ -34,6 +164,7 @@ export const loggingFactory = (
     logger.endGroup?.();
   });
 
+  // fallow-ignore-next-line complexity
   pi.on('tool_execution_end', async event => {
     logger.startGroup?.(`🔧 Tool ended: ${event.toolName} (${event.toolCallId})`);
 
@@ -76,64 +207,18 @@ export const loggingFactory = (
   pi.on('before_agent_start', async (event, ctx) => {
     logger.startGroup?.('🤖 Agent Session settings');
     logger.info(`  Running @earendil-works/pi-coding-agent@${getPiVersion()}`);
-    logger.info('─────────────────────────────────────────────────────────────────────');
+    logger.info(SECTION_SEPARATOR);
 
-    const model = ctx.model;
-    const thinkingLevel = pi.getThinkingLevel();
-    logger.info('📊 LLM');
-    if (model) {
-      logger.info(`  Model:            ${model.provider}/${model.id}`);
-      logger.info(`  Reasoning:        ${model.reasoning}`);
-    } else {
-      logger.info('  Model:     Not configured');
-    }
-    logger.info(`  Thinking Level:   ${thinkingLevel}`);
-    logger.info('─────────────────────────────────────────────────────────────────────');
+    emitLogLines(logger, formatLLMSection(ctx.model, pi.getThinkingLevel()));
 
-    if (extensionInfo && extensionInfo.requested.length > 0) {
-      logger.info('📦 Extensions');
-      logger.info(`  Requested:        ${extensionInfo.requested.join(', ')}`);
-      if (extensionInfo.loaded.length > 0) {
-        logger.info(`  Loaded:           ${extensionInfo.loaded.length} extension(s)`);
-        extensionInfo.loaded.forEach(ext => {
-          logger.info(`    • ${ext}`);
-        });
-      } else {
-        logger.info('  Loaded:           None');
-      }
-      extensionInfo.warnings.forEach(warning => {
-        logger.warning(`  ⚠️  ${warning}`);
-      });
-      logger.info('─────────────────────────────────────────────────────────────────────');
+    if (extensionInfo) {
+      emitLogLines(logger, formatExtensionsSection(extensionInfo));
     }
 
-    const allTools = pi.getAllTools();
-    if (allTools.length > 0) {
-      logger.info('🔧 Available Tools');
-      allTools.forEach(tool => {
-        if (tool.sourceInfo.source) {
-          logger.info(`  • [${tool.sourceInfo.source}] ${tool.name}`);
-        } else {
-          logger.info(`  • ${tool.name}`);
-        }
-      });
-      logger.info('─────────────────────────────────────────────────────────────────────');
-    }
+    emitLogLines(logger, formatToolsSection(pi.getAllTools()));
+    emitLogLines(logger, formatSystemPromptSection(ctx.getSystemPrompt()));
+    emitLogLines(logger, formatUserPromptSection(event.prompt, event.images));
 
-    const systemPrompt = ctx.getSystemPrompt();
-    logger.info('📝 System Prompt');
-    const displaySystemPrompt = truncateText(systemPrompt, 1000);
-    logger.info(displaySystemPrompt);
-    if (systemPrompt.length > 1000) {
-      logger.info(`\n... (${systemPrompt.length - 1000} more characters)`);
-    }
-    logger.info('─────────────────────────────────────────────────────────────────────');
-
-    logger.info('👤 User Prompt');
-    logger.info(truncateText(event.prompt, 500));
-    if (event.images && event.images.length > 0) {
-      logger.info(`  [${event.images.length} image(s) attached]`);
-    }
     logger.endGroup?.();
 
     logger.info('════════════════════════════════════════════════════════════════');

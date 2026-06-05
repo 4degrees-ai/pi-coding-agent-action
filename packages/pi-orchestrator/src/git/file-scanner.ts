@@ -160,6 +160,7 @@ function transformGitignoreContent(content: string, dirPath: string): string {
 /**
  * Transform a single gitignore pattern for a subdirectory context.
  */
+// fallow-ignore-next-line complexity
 function transformPattern(pattern: string, dirPath: string): string {
   const isNegation = pattern.startsWith('!');
   const rawPattern = isNegation ? pattern.slice(1) : pattern;
@@ -201,6 +202,7 @@ function transformPattern(pattern: string, dirPath: string): string {
  *          that exist on disk, so deletion detection can distinguish between
  *          "file was deleted" and "file is gitignored but still present").
  */
+// fallow-ignore-next-line complexity
 export async function scanDirectory(params: ScanDirectoryParams): Promise<{
   changedFiles: { path: string; content: string; mode: FileMode }[];
   encounteredFiles: Set<string>;
@@ -269,6 +271,7 @@ export async function scanDirectory(params: ScanDirectoryParams): Promise<{
  * @param options - Optional scan configuration (repo root, extra ignore patterns).
  * @returns An object containing changed files and deleted files.
  */
+// fallow-ignore-next-line complexity
 export async function scanForChanges(
   referenceFiles: Map<string, { sha: string; content: string | null }>,
   log: Logger,

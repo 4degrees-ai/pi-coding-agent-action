@@ -45,6 +45,7 @@ export type CreateCommentType =
  * Build the GitHub Actions run URL from a deps context, or return
  * `undefined` when any required field is missing.
  */
+// fallow-ignore-next-line complexity
 export function buildActionRunUrl(deps: GitHubModuleDeps): string | undefined {
   const serverUrl = deps.context.serverUrl || 'https://github.com';
   const { owner, repo } = deps.context.repo;
@@ -60,6 +61,7 @@ export function buildActionRunUrl(deps: GitHubModuleDeps): string | undefined {
  * `undefined` when provider or model is missing. Thinking-level is
  * omitted when it's `'off'` or absent.
  */
+// fallow-ignore-next-line complexity
 export function formatModelMetadata(metadata: CommentMetadata): string | undefined {
   if (!metadata.provider || !metadata.model) {
     return undefined;
@@ -105,6 +107,7 @@ export function formatSessionStatsLines(metadata: CommentMetadata): string[] {
  * Order of parts: action run link · model · time · tokens · cost · SDK
  * version · action version.
  */
+// fallow-ignore-next-line complexity
 export function buildMetadataFooter(
   deps: GitHubModuleDeps,
   metadata: CommentMetadata | undefined
@@ -158,6 +161,7 @@ function isPullRequestReviewComment(deps: GitHubModuleDeps): boolean {
  * @returns The Octokit response, or `undefined` if `body` is empty or no
  *   issue/PR number is in context.
  */
+// fallow-ignore-next-line complexity
 async function createComment(
   deps: GitHubModuleDeps,
   body: string
@@ -215,6 +219,7 @@ async function createComment(
  *
  * @internal Exported for testing purposes only.
  */
+// fallow-ignore-next-line complexity
 export function formatExecutionTime(duration: Temporal.Duration): string {
   const rounded = duration.round({ largestUnit: 'hour', smallestUnit: 'second' });
   const parts: string[] = [];

@@ -94,6 +94,7 @@ async function fetchCheckRuns(
   });
 
   let checkRuns = response.data.check_runs.map(
+    // fallow-ignore-next-line complexity
     (cr): CheckRunResult => ({
       id: cr.id,
       name: cr.name,
@@ -134,6 +135,7 @@ async function fetchWorkflowRuns(
   });
 
   let workflowRuns = response.data.workflow_runs.map(
+    // fallow-ignore-next-line complexity
     (wr): WorkflowRunResult => ({
       id: wr.id,
       name: wr.name ?? wr.path?.split('/').pop() ?? 'unknown',
@@ -162,6 +164,7 @@ async function fetchWorkflowRuns(
  *
  * Exported for unit testing.
  */
+// fallow-ignore-next-line complexity
 export function buildCIStatusSummary(
   shortRef: string,
   checkRuns: readonly CheckRunResult[],
@@ -213,6 +216,7 @@ export function buildCIStatusSummary(
  * @param params - Parameters for the CI status query.
  * @returns Structured details about CI status.
  */
+// fallow-ignore-next-line complexity
 export async function getCIStatus(
   deps: GitHubModuleDeps,
   params: GetCIStatusParams

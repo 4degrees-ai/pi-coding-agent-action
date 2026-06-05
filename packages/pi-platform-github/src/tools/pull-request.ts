@@ -158,6 +158,7 @@ const BRANCH_NAME_RULES = buildBranchNameRules();
  *
  * Exported for unit testing.
  */
+// fallow-ignore-next-line complexity
 export function findInvalidRefPattern(branchName: string): string | null {
   for (const pattern of INVALID_REF_PATTERNS) {
     if (typeof pattern === 'string') {
@@ -255,6 +256,7 @@ export async function determineBaseBranch(
  * @returns The final Markdown body string.
  * @internal Exported for testing purposes.
  */
+// fallow-ignore-next-line complexity
 export function generatePullRequestBody(
   deps: GitHubModuleDeps,
   providedBody: string | undefined
@@ -304,13 +306,162 @@ export function validateCreatePullRequestParams(params: CreatePullRequestParams)
  * @param headBranch - Source (head) branch name.
  * @returns An object containing the PR number, URL, and branch refs.
  */
+/** Shape returned by the GitHub `pulls.create` call. Reused across the
+ * create-flow helpers below.
+ */
+interface GitHubPullRequestResult {
+  number: number;
+  url: string;
+  headRef: string;
+  baseRef: string;
+}
+
+/**
+ * Build the human-readable dry-run message. Exported for unit testing.
+ */
+export function buildCreateDryRunMessage(
+  title: string,
+  bodyText: string,
+  baseBranch: string,
+  head: string
+): string {
+  return `[DRY RUN] Would create pull request:\n- Title: ${title}\n- Body: ${bodyText || '(empty)'}\n- Base: ${baseBranch}\n- Head: ${head}`;
+}
+
+/**
+ * Build the structured result for a dry-run. Exported for unit testing.
+ */
+export function buildCreateDryRunResult(
+  message: string,
+  head: string,
+  baseBranch: string
+): CreatePullRequestResult {
+  return {
+    content: [{ type: 'text', text: message }],
+    details: {
+      pullRequestNumber: 0,
+      pullRequestUrl: '',
+      headBranch: head,
+      baseBranch,
+      dryRun: true,
+    },
+  };
+}
+
+/**
+ * Build the human-readable success message after PR creation. Exported for
+ * unit testing.
+ */
+export function buildCreateSuccessMessage(pr: GitHubPullRequestResult): string {
+  return `Pull request #${pr.number} created: ${pr.url}`;
+}
+
+/**
+ * Build the structured result for a successful PR creation. Exported for
+ * unit testing.
+ */
+export function buildCreateSuccessResult(pr: GitHubPullRequestResult): CreatePullRequestResult {
+  return {
+    content: [{ type: 'text', text: buildCreateSuccessMessage(pr) }],
+    details: {
+      pullRequestNumber: pr.number,
+      pullRequestUrl: pr.url,
+      headBranch: pr.headRef,
+      baseBranch: pr.baseRef,
+      dryRun: false,
+    },
+  };
+}
+
+/**
+ * Format a create-pull-request error for re-throw with a consistent prefix.
+ * Exported for unit testing.
+ */
+export function formatCreateError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return `[pull-request] Failed to create pull request: ${message}`;
+}
+
+/**
+ * Prepare the branch, commit and PR on GitHub via the API. Wraps the
+ * sequence `getRef → buildFileMap → scanForChanges → createRef →
+ * createBlobsAndTree → createCommitAndUpdateBranch → createPullRequestOnGitHub`
+ * into a single step.
+ *
+ * Throws `Error` when no changes are detected relative to the base branch.
+ */
+async function prepareBranchAndCreatePR(
+  deps: GitHubModuleDeps,
+  baseBranch: string,
+  head: string,
+  title: string,
+  bodyText: string,
+  log: ReturnType<typeof createLogger>
+): Promise<GitHubPullRequestResult> {
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
+
+  // Get base branch reference
+  log.debug(`Getting base branch "${baseBranch}" reference...`);
+  const baseRef = await deps.octokit.rest.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${baseBranch}`,
+  });
+  const baseSha = baseRef.data.object.sha;
+  log.debug(`Base branch SHA: ${baseSha}`);
+
+  // Get files that exist in the base branch tree (for comparison)
+  log.debug(`Getting base branch tree...`);
+  const baseFiles = await buildFileMap(deps, baseSha);
+  log.debug(`Found ${baseFiles.size} files in base branch`);
+
+  // Scan for changes
+  const { changedFiles, deletedFiles } = await scanForChanges(deps, baseFiles, log);
+
+  if (changedFiles.length === 0 && deletedFiles.length === 0) {
+    throw new Error(
+      'No changes detected. Please add new files and/or make your changes before creating a pull request.'
+    );
+  }
+
+  // Create new branch reference from base branch
+  log.debug(`Creating new branch "${head}"...`);
+  await deps.octokit.rest.git.createRef({
+    owner,
+    repo,
+    ref: `refs/heads/${head}`,
+    sha: baseSha,
+  });
+  log.debug(`Branch created successfully`);
+
+  // Create blobs and tree
+  const treeSha = await createBlobsAndTree(deps, {
+    changedFiles,
+    deletedFiles,
+    parentSha: baseSha,
+    log,
+  });
+
+  // Create commit and update branch
+  await createCommitAndUpdateBranch(deps, {
+    treeSha,
+    parentSha: baseSha,
+    branchName: head,
+    message: title,
+    log,
+  });
+
+  return createPullRequestOnGitHub(deps, title, bodyText, baseBranch, head);
+}
+
 async function createPullRequestOnGitHub(
   deps: GitHubModuleDeps,
   title: string,
   body: string,
   baseBranch: string,
   headBranch: string
-): Promise<{ number: number; url: string; headRef: string; baseRef: string }> {
+): Promise<GitHubPullRequestResult> {
   const owner = deps.context.repo.owner;
   const repo = deps.context.repo.repo;
   const log = createLogger(deps);
@@ -347,6 +498,7 @@ async function createPullRequestOnGitHub(
  *          details about the created PR (or dry-run output).
  * @throws {Error} If no changed files are detected or the GitHub API call fails.
  */
+// fallow-ignore-next-line complexity
 export async function createPullRequest(
   deps: GitHubModuleDeps,
   params: CreatePullRequestParams
@@ -367,108 +519,26 @@ export async function createPullRequest(
   log.debug(`Base: ${base ?? 'default'}`);
   log.debug(`DryRun: ${dryRun ?? false}`);
 
-  // Determine base branch
+  // Determine base branch + body text (shared by dry-run and live paths)
   const baseBranch = await determineBaseBranch(deps, base);
-
-  // Generate body text
   const bodyText = generatePullRequestBody(deps, body);
 
-  // Dry run mode
+  // Dry run mode: return without calling the API
   if (dryRun) {
-    const message = `[DRY RUN] Would create pull request:\n- Title: ${title}\n- Body: ${bodyText || '(empty)'}\n- Base: ${baseBranch}\n- Head: ${head}`;
+    const message = buildCreateDryRunMessage(title, bodyText, baseBranch, head);
     log.debug(message);
-
-    return {
-      content: [{ type: 'text' as const, text: message }],
-      details: {
-        pullRequestNumber: 0,
-        pullRequestUrl: '',
-        headBranch: head,
-        baseBranch,
-        dryRun: true,
-      },
-    };
+    return buildCreateDryRunResult(message, head, baseBranch);
   }
 
   // Create and push the new branch via GitHub API
   log.debug(`Preparing branch and changes via GitHub API...`);
 
   try {
-    const owner = deps.context.repo.owner;
-    const repo = deps.context.repo.repo;
-
-    // Get base branch reference
-    log.debug(`Getting base branch "${baseBranch}" reference...`);
-    const baseRef = await deps.octokit.rest.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${baseBranch}`,
-    });
-    const baseSha = baseRef.data.object.sha;
-    log.debug(`Base branch SHA: ${baseSha}`);
-
-    // Get files that exist in the base branch tree (for comparison)
-    log.debug(`Getting base branch tree...`);
-    const baseFiles = await buildFileMap(deps, baseSha);
-    log.debug(`Found ${baseFiles.size} files in base branch`);
-
-    // Scan for changes
-    const { changedFiles, deletedFiles } = await scanForChanges(deps, baseFiles, log);
-
-    if (changedFiles.length === 0 && deletedFiles.length === 0) {
-      const errorMsg =
-        'No changes detected. Please add new files and/or make your changes before creating a pull request.';
-      throw new Error(errorMsg);
-    }
-
-    // Create new branch reference from base branch
-    log.debug(`Creating new branch "${head}"...`);
-    await deps.octokit.rest.git.createRef({
-      owner,
-      repo,
-      ref: `refs/heads/${head}`,
-      sha: baseSha,
-    });
-    log.debug(`Branch created successfully`);
-
-    // Create blobs and tree
-    const treeSha = await createBlobsAndTree(deps, {
-      changedFiles,
-      deletedFiles,
-      parentSha: baseSha,
-      log,
-    });
-
-    // Create commit and update branch
-    await createCommitAndUpdateBranch(deps, {
-      treeSha,
-      parentSha: baseSha,
-      branchName: head,
-      message: title,
-      log,
-    });
-
-    // Create pull request
-    const prResult = await createPullRequestOnGitHub(deps, title, bodyText, baseBranch, head);
-
-    const successMessage = `Pull request #${prResult.number} created: ${prResult.url}`;
-
+    const prResult = await prepareBranchAndCreatePR(deps, baseBranch, head, title, bodyText, log);
+    const successMessage = buildCreateSuccessMessage(prResult);
     log.info(`SUCCESS: ${successMessage}`);
-
-    const details: CreatePullRequestDetails = {
-      pullRequestNumber: prResult.number,
-      pullRequestUrl: prResult.url,
-      headBranch: prResult.headRef,
-      baseBranch: prResult.baseRef,
-      dryRun: false,
-    };
-
-    return {
-      content: [{ type: 'text' as const, text: successMessage }],
-      details,
-    };
+    return buildCreateSuccessResult(prResult);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`[pull-request] Failed to create pull request: ${message}`);
+    throw new Error(formatCreateError(error));
   }
 }

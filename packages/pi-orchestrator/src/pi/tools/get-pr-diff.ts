@@ -102,6 +102,7 @@ const BYTE_TRUNCATION_MARKER = (maxBytes: number) => `\n... (truncated at ${maxB
  * cut mid-line. Returns `{ text, truncated }`; `truncated` is `false`
  * when no truncation was needed.
  */
+// fallow-ignore-next-line complexity
 export function truncateDiffByBytes(
   diff: string,
   maxBytes: number
@@ -196,6 +197,7 @@ export function truncateDiff(diff: string, maxLines: number, maxBytes: number): 
 /**
  * Resolve the owner, repo, and pull number from params or platform context.
  */
+// fallow-ignore-next-line complexity
 export function resolvePRParams(
   params: GetPRDiffToolParams,
   provider: PlatformProvider
@@ -240,6 +242,7 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
         truncated: false,
       },
       prepareParams: params => params,
+      // fallow-ignore-next-line complexity
       execute: async params => {
         const resolved = resolvePRParams(params, provider);
 

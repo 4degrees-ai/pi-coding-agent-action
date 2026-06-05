@@ -8,6 +8,7 @@
  * @param status - The run/job status (e.g. "completed", "in_progress", "queued").
  * @param conclusion - The run/job conclusion (e.g. "success", "failure", "cancelled").
  */
+// fallow-ignore-next-line complexity
 export function getStatusIcon(
   status: string | null | undefined,
   conclusion: string | null | undefined

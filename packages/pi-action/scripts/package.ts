@@ -15,6 +15,22 @@ interface GitBuildMetadata {
 }
 
 /**
+ * Pure formatter for git-build metadata. Coerces nullable inputs to
+ * `'unknown'` and truncates the head commit SHA to 7 characters.
+ *
+ * Exported for unit testing.
+ */
+export function formatGitMetadata(
+  branch: string | null | void,
+  headOid: string | undefined
+): GitBuildMetadata {
+  return {
+    branch: branch ?? 'unknown',
+    sha: (headOid ?? 'unknown').slice(0, 7),
+  };
+}
+
+/**
  * Resolve the git branch and short commit SHA using `isomorphic-git`.
  *
  * Uses the pure-JS git implementation instead of shelling out to the `git`
@@ -30,14 +46,21 @@ async function getGitBuildMetadata(dir: string): Promise<GitBuildMetadata> {
       git.currentBranch({ fs, dir }),
       git.log({ fs, dir, depth: 1 }),
     ]);
-
-    const resolvedBranch = branch ?? 'unknown';
-    const sha = (log[0]?.oid ?? 'unknown').slice(0, 7);
-
-    return { branch: resolvedBranch, sha };
+    return formatGitMetadata(branch, log[0]?.oid);
   } catch {
     return { branch: 'unknown', sha: 'unknown' };
   }
+}
+
+/**
+ * Resolve git metadata for the build, returning `'unknown'` placeholders when
+ * `cwd` is not a git checkout (no `.git` directory). Exported for unit testing.
+ */
+export async function resolveGitMeta(cwd: string): Promise<GitBuildMetadata> {
+  if (!existsSync(join(cwd, '.git'))) {
+    return { branch: 'unknown', sha: 'unknown' };
+  }
+  return getGitBuildMetadata(cwd);
 }
 
 /**
@@ -115,24 +138,74 @@ function patchSDKLoaderPlugin(): Plugin {
   };
 }
 
-export async function buildDist(cwd: string = process.cwd()): Promise<void> {
-  const baseVersion = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8')).version;
+/**
+ * Read the `version` field from a JSON file at `path`. Throws if the file
+ * is missing, unreadable, or its JSON lacks a `version` field.
+ *
+ * Exported for unit testing.
+ */
+export function readJsonVersion(path: string): string {
+  return JSON.parse(readFileSync(path, 'utf-8')).version;
+}
 
-  // Compose the version string with git build metadata.
-  // On the release branch (v2), this is just the bare semver.
-  // On dev branches, it includes the branch name and commit SHA.
-  // Uses isomorphic-git (pure JS) to avoid shelling out to the git CLI.
-  const dir = join(cwd, '.git');
-  const gitMeta = existsSync(dir) ? await getGitBuildMetadata(cwd) : { branch: 'unknown', sha: 'unknown' };
+/**
+ * Pi SDK runtime assets that must be copied to `dist/pi-sdk/` because they're
+ * read by file I/O at runtime (not bundled by esbuild).
+ *
+ * Each tuple is `[relativeDirectory, files]` relative to the SDK `dist/` dir.
+ */
+const SDK_ASSETS: ReadonlyArray<readonly [string, readonly string[]]> = [
+  // HTML session export templates (read by export-html/index.js)
+  ['core/export-html', ['template.html', 'template.css', 'template.js']],
+  // Vendor libs for HTML export (read by export-html/index.js)
+  ['core/export-html/vendor', ['marked.min.js', 'highlight.min.js']],
+  // Built-in theme definitions (read by theme/theme.js via getThemesDir())
+  ['modes/interactive/theme', ['dark.json', 'light.json']],
+];
+
+/**
+ * Copy a single SDK asset directory, creating the destination as needed and
+ * silently skipping missing source files. Exported for unit testing.
+ */
+export function copySdkAssetDir(
+  srcDir: string,
+  destDir: string,
+  files: readonly string[]
+): void {
+  if (!existsSync(srcDir)) return;
+  mkdirSync(destDir, { recursive: true });
+  for (const file of files) {
+    const src = join(srcDir, file);
+    if (existsSync(src)) {
+      copyFileSync(src, join(destDir, file));
+    }
+  }
+}
+
+/**
+ * Copy the minimal set of Pi SDK runtime assets to the destination directory.
+ * Exported for unit testing.
+ */
+export function copyAllSdkAssets(sdkDistDir: string, piSdkDest: string): void {
+  for (const [relDir, files] of SDK_ASSETS) {
+    copySdkAssetDir(join(sdkDistDir, relDir), join(piSdkDest, relDir), files);
+  }
+}
+
+export async function buildDist(cwd: string = process.cwd()): Promise<void> {
+  const baseVersion = readJsonVersion(join(cwd, 'package.json'));
+  const gitMeta = await resolveGitMeta(cwd);
   const version = composeActionVersion(baseVersion, gitMeta);
 
   // Resolve Pi SDK path dynamically — in Bun workspaces, deps are hoisted to root node_modules,
   // but the prepare lifecycle may run before the full tree is materialized.
   const require = createRequire(import.meta.url);
   const piPkgPath = require.resolve('@earendil-works/pi-coding-agent/package.json');
-  const piVersion = JSON.parse(readFileSync(piPkgPath, 'utf-8')).version;
+  const piVersion = readJsonVersion(piPkgPath);
 
-  console.log(`[package] Building action v${version} (base: ${baseVersion}, branch: ${gitMeta.branch}, sha: ${gitMeta.sha})`);
+  console.log(
+    `[package] Building action v${version} (base: ${baseVersion}, branch: ${gitMeta.branch}, sha: ${gitMeta.sha})`
+  );
 
   await build({
     entryPoints: [join(cwd, 'packages/pi-action/src/run.ts')],
@@ -161,31 +234,7 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   // The JS code is already fully inlined by esbuild — only non-code assets
   // (templates, vendor libs, theme JSON) need to be present on disk so the
   // SDK's file I/O can find them when PI_PACKAGE_DIR points to dist/pi-sdk/.
-  //
-  // Asset map: SDK source -> destination under dist/pi-sdk/dist/
-  const sdkDistDir = join(dirname(piPkgPath), 'dist');
-  const piSdkDest = join(cwd, 'dist/pi-sdk/dist');
-  const sdkAssets: [string, string[]][] = [
-    // HTML session export templates (read by export-html/index.js)
-    ['core/export-html', ['template.html', 'template.css', 'template.js']],
-    // Vendor libs for HTML export (read by export-html/index.js)
-    ['core/export-html/vendor', ['marked.min.js', 'highlight.min.js']],
-    // Built-in theme definitions (read by theme/theme.js via getThemesDir())
-    ['modes/interactive/theme', ['dark.json', 'light.json']],
-  ];
-  for (const [relDir, files] of sdkAssets) {
-    const srcDir = join(sdkDistDir, relDir);
-    const destDir = join(piSdkDest, relDir);
-    if (existsSync(srcDir)) {
-      mkdirSync(destDir, { recursive: true });
-      for (const file of files) {
-        const src = join(srcDir, file);
-        if (existsSync(src)) {
-          copyFileSync(src, join(destDir, file));
-        }
-      }
-    }
-  }
+  copyAllSdkAssets(join(dirname(piPkgPath), 'dist'), join(cwd, 'dist/pi-sdk/dist'));
 }
 
 // If run directly, execute the build

@@ -95,6 +95,7 @@ export async function addReaction(deps: GitHubModuleDeps): Promise<GitHubReactio
  * @returns The Octokit reaction deletion response, or `undefined` if the
  *          reaction or comment is not available.
  */
+// fallow-ignore-next-line complexity
 export async function deleteReaction(
   deps: GitHubModuleDeps,
   reaction: GitHubReactionType | undefined

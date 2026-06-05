@@ -22,9 +22,16 @@ export {
   formatThreadComments,
   formatReviewComments,
 } from './pi/tools/common';
-export { createLoggingFactory } from './pi/logging';
-export type { ExtensionLoadingInfo } from './pi/logging';
-export { truncateText } from './pi/logging';
+export {
+  createLoggingFactory,
+  truncateText,
+  formatLLMSection,
+  formatExtensionsSection,
+  formatToolsSection,
+  formatSystemPromptSection,
+  formatUserPromptSection,
+} from './pi/logging';
+export type { ExtensionLoadingInfo, LogLine } from './pi/logging';
 export { resolveExtensions, getResourceLoader } from './pi/resource-loader';
 export { createPRToolFactory } from './pi/tools/create-pr';
 export { createReviewToolFactory } from './pi/tools/create-review';

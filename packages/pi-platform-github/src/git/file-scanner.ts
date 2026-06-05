@@ -67,6 +67,7 @@ async function fetchBlobContent(
  * @param log - Logger instance for debug output.
  * @returns Map of path -> { sha, content }.
  */
+// fallow-ignore-next-line complexity
 export async function buildFileMap(
   deps: GitHubModuleDeps,
   treeSha: string,

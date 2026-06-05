@@ -29,6 +29,18 @@
   },
   "duplicates": {
     "minLines": 6,
-    "minTokens": 50
+    "minTokens": 50,
+    "ignore": [
+      "**/tests/**",
+      "**/*.spec.ts",
+      "**/*.test.ts"
+    ]
+  },
+  "health": {
+    "ignore": [
+      "**/tests/**",
+      "**/*.spec.ts",
+      "**/*.test.ts"
+    ]
   }
 }

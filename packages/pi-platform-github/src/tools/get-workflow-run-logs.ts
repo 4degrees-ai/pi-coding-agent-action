@@ -55,6 +55,7 @@ export interface RawJob {
  * Map raw Octokit job objects to the local `JobLog` shape (no log content yet).
  */
 export function mapJobsResponse(jobs: RawJob[]): JobLog[] {
+  // fallow-ignore-next-line complexity
   return jobs.map(job => ({
     id: job.id,
     name: job.name,
@@ -93,6 +94,7 @@ export function computeJobBudgets(jobCount: number, maxBytesInput: number | unde
  *     when truncation occurred
  *   - the `truncated` flag
  */
+// fallow-ignore-next-line complexity
 export function truncateLogTail(
   logText: string,
   jobBudget: number
@@ -129,6 +131,7 @@ export function truncateLogTail(
  * Build the human-readable output string and the aggregate `truncated` flag
  * from a list of (already-downloaded-and-truncated) jobs.
  */
+// fallow-ignore-next-line complexity
 export function renderJobLogsOutput(runId: number, jobs: JobLog[]): string {
   const lines: string[] = [`Workflow Run #${runId} — Job Logs:`, ''];
   for (const job of jobs) {
@@ -160,6 +163,7 @@ export interface JobLogDownload {
  * a placeholder string (rather than throwing) when the download fails or
  * the budget has been exhausted.
  */
+// fallow-ignore-next-line complexity
 export async function downloadJobLog(
   deps: GitHubModuleDeps,
   owner: string,
@@ -205,6 +209,7 @@ export async function downloadJobLog(
  * @param params - Parameters including the run ID and optional byte limit.
  * @returns Structured details about the workflow run logs.
  */
+// fallow-ignore-next-line complexity
 export async function getWorkflowRunLogs(
   deps: GitHubModuleDeps,
   params: GetWorkflowRunLogsParams

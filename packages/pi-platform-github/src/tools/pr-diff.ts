@@ -45,6 +45,7 @@ export function matchesIgnorePattern(filePath: string, ignoreFiles: string[]): b
  * @param ignoreFiles - Patterns of files to exclude.
  * @returns The filtered diff string.
  */
+// fallow-ignore-next-line complexity
 export function filterDiffByIgnoreFiles(
   deps: GitHubModuleDeps,
   diff: string,

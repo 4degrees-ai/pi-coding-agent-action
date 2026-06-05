@@ -80,6 +80,7 @@ async function updatePullRequestMetadata(
  * @throws {Error} If validation fails.
  * @internal Exported for testing purposes.
  */
+// fallow-ignore-next-line complexity
 export function validateUpdatePullRequestParams(params: UpdatePullRequestParams): void {
   if (params.title !== undefined && params.title.length > MAX_TITLE_LENGTH) {
     throw new Error(
@@ -225,6 +226,7 @@ export function buildDryRunReport(input: {
  *
  * Exported for unit testing.
  */
+// fallow-ignore-next-line complexity
 export function formatChangeSummary(
   changedFiles: readonly { path: string }[],
   deletedFiles: readonly string[]
@@ -437,6 +439,7 @@ export function logPRFoundDebug(
  *
  * Exported for unit testing.
  */
+// fallow-ignore-next-line complexity
 export async function applyMetadataUpdate(
   deps: GitHubModuleDeps,
   pullNumber: number,

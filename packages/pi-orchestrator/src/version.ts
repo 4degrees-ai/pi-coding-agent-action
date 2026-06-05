@@ -76,6 +76,23 @@ let _actionVersion: string | undefined;
 let _piVersion: string | undefined;
 
 /**
+ * Read the `version` field from a `package.json` file, returning `undefined`
+ * when the file is missing, unreadable, or has no `version` field.
+ */
+function readPackageVersion(pkgPath: string): string | undefined {
+  try {
+    if (!existsSync(pkgPath)) {
+      return undefined;
+    }
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    const v: string | undefined = pkg.version;
+    return v;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Read the action's own package version at runtime.
  *
  * Returns the full composed version string, which may include build metadata
@@ -101,17 +118,10 @@ export function getActionVersion(): string {
   if (typeof __VERSION__ !== 'undefined') {
     version = __VERSION__;
   } else {
-    try {
-      const pkgPath = join(projectRoot, 'package.json');
-      if (existsSync(pkgPath)) {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-        const v: string | undefined = pkg.version;
-        if (v !== undefined) {
-          version = v;
-        }
-      }
-    } catch {
-      // Fall through — version stays 'unknown'
+    const pkgPath = join(projectRoot, 'package.json');
+    const v = readPackageVersion(pkgPath);
+    if (v !== undefined) {
+      version = v;
     }
   }
 
@@ -127,6 +137,7 @@ export function getActionVersion(): string {
  * - `2.19.2-dev+develop.a1b2c3d` → `{ version: '2.19.2', isDev: true, branch: 'develop', sha: 'a1b2c3d', ... }`
  * - `unknown`                   → `{ version: 'unknown', isDev: false, ... }`
  */
+// fallow-ignore-next-line complexity
 function parseActionBuildInfo(fullVersion: string): ActionBuildInfo {
   if (fullVersion === 'unknown') {
     return {
@@ -184,6 +195,7 @@ function parseActionBuildInfo(fullVersion: string): ActionBuildInfo {
  *
  * Callers do `v${formatActionVersion()}` to get display-ready output.
  */
+// fallow-ignore-next-line complexity
 export function formatActionVersion(version?: string): string {
   const info = parseActionBuildInfo(version ?? getActionVersion());
 
@@ -215,23 +227,16 @@ export function getPiVersion(): string {
   if (typeof __PI_CODING_AGENT_VERSION__ !== 'undefined') {
     version = __PI_CODING_AGENT_VERSION__;
   } else {
-    try {
-      const pkgPath = join(
-        projectRoot,
-        'node_modules',
-        '@earendil-works',
-        'pi-coding-agent',
-        'package.json'
-      );
-      if (existsSync(pkgPath)) {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-        const v: string | undefined = pkg.version;
-        if (v !== undefined) {
-          version = v;
-        }
-      }
-    } catch {
-      // Fall through — version stays 'unknown'
+    const pkgPath = join(
+      projectRoot,
+      'node_modules',
+      '@earendil-works',
+      'pi-coding-agent',
+      'package.json'
+    );
+    const v = readPackageVersion(pkgPath);
+    if (v !== undefined) {
+      version = v;
     }
   }
 

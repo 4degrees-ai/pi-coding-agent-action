@@ -61,6 +61,11 @@ export {
   validateCreatePullRequestParams,
   validateBranchName,
   findInvalidRefPattern,
+  buildCreateDryRunMessage,
+  buildCreateDryRunResult,
+  buildCreateSuccessMessage,
+  buildCreateSuccessResult,
+  formatCreateError,
 } from './tools/pull-request';
 
 export {

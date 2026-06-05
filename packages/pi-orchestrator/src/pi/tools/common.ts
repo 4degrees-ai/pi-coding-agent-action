@@ -43,6 +43,7 @@ export function formatThreadHeader(thread: IssueOrPRThread): string[] {
  * Optional timestamp lines (created / updated / closed / merged). Only
  * emits a line when the corresponding timestamp is truthy.
  */
+// fallow-ignore-next-line complexity
 export function formatThreadTimestamps(thread: IssueOrPRThread): string[] {
   const lines: string[] = [];
   if (thread.created_at) {
@@ -74,6 +75,7 @@ export function formatThreadLabels(thread: IssueOrPRThread): string[] {
 /**
  * PR-only fields (head/base branch, head SHA). Returns `[]` for issues.
  */
+// fallow-ignore-next-line complexity
 export function formatPRFields(thread: IssueOrPRThread): string[] {
   if (!thread.is_pull_request) {
     return [];

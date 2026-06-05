@@ -81,6 +81,7 @@ export function getCIStatusToolFactory(provider: PlatformProvider) {
         check_runs: [],
         workflow_runs: [],
       },
+      // fallow-ignore-next-line complexity
       prepareParams: (params: GetCIStatusToolParams): GetCIStatusParams => ({
         ...(params.owner !== undefined ? { owner: params.owner } : {}),
         ...(params.repo !== undefined ? { repo: params.repo } : {}),

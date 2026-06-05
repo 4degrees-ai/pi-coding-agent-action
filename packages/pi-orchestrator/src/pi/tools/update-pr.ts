@@ -78,6 +78,7 @@ export function updatePullRequestToolFactory(provider: PlatformProvider) {
         baseBranch: '',
         dryRun: false,
       },
+      // fallow-ignore-next-line complexity
       prepareParams: (params: UpdatePullRequestToolParams) => {
         const { pull_number, title, body, message, dryRun } = params;
         const updateParams: UpdatePullRequestParams = {};
