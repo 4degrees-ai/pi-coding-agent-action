@@ -15,6 +15,14 @@
  * ⚠️  esbuild `define` only replaces **bare identifier references**, not
  * property accesses. That means `globalThis.__VERSION__` would NOT be
  * replaced — always use `__VERSION__` as a bare identifier.
+ *
+ * ## Version scheme
+ *
+ * - **Release builds** (built from `v2` branch): bare semver, e.g. `2.19.2`
+ * - **Development builds** (built from any other branch):
+ *   `2.19.2-dev+<branch>.<sha>`, e.g. `2.19.2-dev+develop.a1b2c3d`
+ *
+ * See {@link formatActionVersion} for the human-readable display format.
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -27,6 +35,29 @@ import { join } from 'node:path';
 /* eslint-disable no-var */
 declare var __VERSION__: string | undefined;
 declare var __PI_CODING_AGENT_VERSION__: string | undefined;
+
+// ---------------------------------------------------------------------------
+// Action build info types
+// ---------------------------------------------------------------------------
+
+/**
+ * Structured metadata about the action build provenance.
+ *
+ * When running from a released build (`isDev === false`), `branch` and `sha`
+ * will be `undefined` because the bare semver contains no build metadata.
+ */
+export interface ActionBuildInfo {
+  /** The base semver version (always the `package.json` version). */
+  version: string;
+  /** Whether this is a development build (not from the `v2` release branch). */
+  isDev: boolean;
+  /** Git branch name, if available from build metadata, or `undefined`. */
+  branch: string | undefined;
+  /** Short commit SHA, if available from build metadata, or `undefined`. */
+  sha: string | undefined;
+  /** The full composed version string (includes build metadata when dev). */
+  fullVersion: string;
+}
 
 /**
  * The project root directory, used to locate `package.json` and
@@ -46,6 +77,12 @@ let _piVersion: string | undefined;
 
 /**
  * Read the action's own package version at runtime.
+ *
+ * Returns the full composed version string, which may include build metadata
+ * for development builds (e.g. `2.19.2-dev+develop.a1b2c3d`).
+ *
+ * For a human-readable display format, use {@link formatActionVersion}.
+ * For structured build provenance data, see the {@link ActionBuildInfo} type.
  *
  * Resolution order:
  * 1. The esbuild-injected `__VERSION__` identifier (when bundled).
@@ -80,6 +117,81 @@ export function getActionVersion(): string {
 
   _actionVersion = version;
   return version;
+}
+
+/**
+ * Parse a (possibly composed) action version string into structured build info.
+ *
+ * Handles these formats:
+ * - `2.19.2`                    → `{ version: '2.19.2', isDev: false, ... }`
+ * - `2.19.2-dev+develop.a1b2c3d` → `{ version: '2.19.2', isDev: true, branch: 'develop', sha: 'a1b2c3d', ... }`
+ * - `unknown`                   → `{ version: 'unknown', isDev: false, ... }`
+ */
+function parseActionBuildInfo(fullVersion: string): ActionBuildInfo {
+  if (fullVersion === 'unknown') {
+    return {
+      version: 'unknown',
+      isDev: false,
+      branch: undefined,
+      sha: undefined,
+      fullVersion: 'unknown',
+    };
+  }
+
+  // Parse semver with optional pre-release and build metadata:
+  //   <semver>[-<pre>][+<build>]
+  // The build metadata portion uses dot-separated identifiers.
+  // We expect: <baseVersion>-dev+<branch>.<sha>
+  const plusIndex = fullVersion.indexOf('+');
+
+  if (plusIndex === -1) {
+    // No build metadata → release build
+    return { version: fullVersion, isDev: false, branch: undefined, sha: undefined, fullVersion };
+  }
+
+  // Extract the base version (before the pre-release tag like `-dev`)
+  const dashIndex = fullVersion.indexOf('-');
+  const version = dashIndex > 0 ? fullVersion.slice(0, dashIndex) : fullVersion.slice(0, plusIndex);
+
+  // Parse build metadata: <branch>.<sha>
+  const buildMeta = fullVersion.slice(plusIndex + 1); // e.g. "develop.a1b2c3d"
+  const parts = buildMeta.split('.');
+
+  // Take the last part as SHA, everything before as branch
+  const sha: string | undefined = parts.length > 0 ? parts[parts.length - 1] : undefined;
+  const branch: string | undefined =
+    parts.length > 1 ? parts.slice(0, parts.length - 1).join('.') : undefined;
+
+  return {
+    version,
+    isDev: true,
+    branch,
+    sha,
+    fullVersion,
+  };
+}
+
+/**
+ * Format an action version string for human-readable display (no `v` prefix —
+ * callers add their own prefix when needed).
+ *
+ * - Release builds: `2.19.2`
+ * - Development builds: `2.19.2-dev (develop @ a1b2c3d)`
+ * - Unknown: `unknown`
+ *
+ * When called without an argument, reads the running action's version.
+ * When called with a version string, parses and formats that string.
+ *
+ * Callers do `v${formatActionVersion()}` to get display-ready output.
+ */
+export function formatActionVersion(version?: string): string {
+  const info = parseActionBuildInfo(version ?? getActionVersion());
+
+  if (!info.isDev || !info.branch || !info.sha) {
+    return info.version;
+  }
+
+  return `${info.version}-dev (${info.branch} @ ${info.sha})`;
 }
 
 /**

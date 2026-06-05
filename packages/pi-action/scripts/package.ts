@@ -1,7 +1,69 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import fs, { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { build, type Plugin } from 'esbuild';
 import { join, dirname } from 'node:path';
+import git from 'isomorphic-git';
+
+/**
+ * Result of reading git metadata at build time.
+ */
+interface GitBuildMetadata {
+  /** Git branch name, or `'unknown'` if unavailable. */
+  branch: string;
+  /** Short (7-char) commit SHA, or `'unknown'` if unavailable. */
+  sha: string;
+}
+
+/**
+ * Resolve the git branch and short commit SHA using `isomorphic-git`.
+ *
+ * Uses the pure-JS git implementation instead of shelling out to the `git`
+ * CLI, so it works reliably even in environments where the git binary has
+ * restricted permissions (e.g. some CI runner setups).
+ *
+ * Falls back to `{ branch: 'unknown', sha: 'unknown' }` when the current
+ * directory is not a git repository or any other error occurs.
+ */
+async function getGitBuildMetadata(dir: string): Promise<GitBuildMetadata> {
+  try {
+    const [branch, log] = await Promise.all([
+      git.currentBranch({ fs, dir }),
+      git.log({ fs, dir, depth: 1 }),
+    ]);
+
+    const resolvedBranch = branch ?? 'unknown';
+    const sha = (log[0]?.oid ?? 'unknown').slice(0, 7);
+
+    return { branch: resolvedBranch, sha };
+  } catch {
+    return { branch: 'unknown', sha: 'unknown' };
+  }
+}
+
+/**
+ * Sanitize a string for use in semver build metadata.
+ *
+ * Semver build metadata allows only `[0-9a-zA-Z-]` plus `.` separators.
+ * Characters like `/` in branch names (e.g. `feature/foo`) are replaced with `-`.
+ */
+function sanitizeSemverIdent(ident: string): string {
+  return ident.replace(/[^0-9a-zA-Z-]/g, '-');
+}
+
+/**
+ * Compose the action version string based on the current git context.
+ *
+ * - On the release branch (`v2`): uses the bare semver from `package.json`.
+ * - On any other branch: appends `-dev+<branch>.<sha>` using semver build metadata syntax.
+ */
+function composeActionVersion(baseVersion: string, meta: GitBuildMetadata): string {
+  if (meta.branch === 'v2') {
+    return baseVersion;
+  }
+  const branch = sanitizeSemverIdent(meta.branch);
+  const sha = sanitizeSemverIdent(meta.sha);
+  return `${baseVersion}-dev+${branch}.${sha}`;
+}
 
 /**
  * esbuild plugin that patches the SDK's `getAliases()` function to handle
@@ -54,13 +116,23 @@ function patchSDKLoaderPlugin(): Plugin {
 }
 
 export async function buildDist(cwd: string = process.cwd()): Promise<void> {
-  const version = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8')).version;
+  const baseVersion = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8')).version;
+
+  // Compose the version string with git build metadata.
+  // On the release branch (v2), this is just the bare semver.
+  // On dev branches, it includes the branch name and commit SHA.
+  // Uses isomorphic-git (pure JS) to avoid shelling out to the git CLI.
+  const dir = join(cwd, '.git');
+  const gitMeta = existsSync(dir) ? await getGitBuildMetadata(cwd) : { branch: 'unknown', sha: 'unknown' };
+  const version = composeActionVersion(baseVersion, gitMeta);
 
   // Resolve Pi SDK path dynamically — in Bun workspaces, deps are hoisted to root node_modules,
   // but the prepare lifecycle may run before the full tree is materialized.
   const require = createRequire(import.meta.url);
   const piPkgPath = require.resolve('@earendil-works/pi-coding-agent/package.json');
   const piVersion = JSON.parse(readFileSync(piPkgPath, 'utf-8')).version;
+
+  console.log(`[package] Building action v${version} (base: ${baseVersion}, branch: ${gitMeta.branch}, sha: ${gitMeta.sha})`);
 
   await build({
     entryPoints: [join(cwd, 'packages/pi-action/src/run.ts')],

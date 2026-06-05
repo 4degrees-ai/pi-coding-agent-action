@@ -24,7 +24,7 @@ import {
   type SessionStats,
 } from './types';
 import type { CreateReactionType, PlatformProvider } from './platform';
-import { getActionVersion } from './version';
+import { getActionVersion, formatActionVersion } from './version';
 
 /**
  * Build the body of the success comment posted at the end of a run.
@@ -74,7 +74,7 @@ export class ActionOrchestrator {
    *         so they never prevent setFailed from running.
    */
   async execute(): Promise<void> {
-    this.logger.info(`running action v${getActionVersion()}`);
+    this.logger.info(`running action v${formatActionVersion()}`);
     const startTime = this.git.getStartTime() ?? Temporal.Now.instant();
     let reaction: CreateReactionType | undefined;
     let prompt: string | undefined;

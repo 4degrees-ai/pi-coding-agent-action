@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { getActionVersion, getPiVersion } from '@alexanderfortin/pi-orchestrator';
+import {
+  getActionVersion,
+  getPiVersion,
+  formatActionVersion,
+} from '@alexanderfortin/pi-orchestrator';
 
 describe('getActionVersion', () => {
   test('returns a non-empty string', () => {
@@ -37,6 +41,36 @@ describe('getPiVersion', () => {
     const first = getPiVersion();
     const second = getPiVersion();
     expect(first).toBe(second);
+  });
+});
+
+describe('formatActionVersion', () => {
+  test('formats a clean release version as-is', () => {
+    expect(formatActionVersion('2.19.2')).toBe('2.19.2');
+  });
+
+  test('formats a dev version with branch and sha', () => {
+    expect(formatActionVersion('2.19.2-dev+develop.a1b2c3d')).toBe(
+      '2.19.2-dev (develop @ a1b2c3d)'
+    );
+  });
+
+  test("handles 'unknown' gracefully", () => {
+    expect(formatActionVersion('unknown')).toBe('unknown');
+  });
+
+  test('handles branch name with forward slashes (sanitized to dashes)', () => {
+    expect(formatActionVersion('2.19.2-dev+feature-my-feature.abc1234')).toBe(
+      '2.19.2-dev (feature-my-feature @ abc1234)'
+    );
+  });
+
+  test('returns package version when called without argument (non-bundled)', () => {
+    const result = formatActionVersion();
+    expect(typeof result).toBe('string');
+    expect(result.length).toBeGreaterThan(0);
+    // In test environment (non-bundled), this returns the package.json version
+    expect(result).toMatch(/^\d+\.\d+\.\d+/);
   });
 });
 

@@ -22,6 +22,7 @@ import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-meth
 import { Temporal } from '@js-temporal/polyfill';
 import type { GitHubModuleDeps } from './types';
 import type { CommentMetadata } from '@alexanderfortin/pi-orchestrator';
+import { formatActionVersion } from '@alexanderfortin/pi-orchestrator';
 
 /**
  * Metadata to include in the comment footer.
@@ -125,7 +126,7 @@ export function buildMetadataFooter(
     }
     parts.push(...formatSessionStatsLines(metadata));
     if (metadata.actionVersion) {
-      parts.push(`Action v${metadata.actionVersion}`);
+      parts.push(`Action v${formatActionVersion(metadata.actionVersion)}`);
     }
   }
 

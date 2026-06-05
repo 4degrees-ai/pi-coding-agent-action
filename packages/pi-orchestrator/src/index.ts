@@ -35,7 +35,8 @@ export { getWorkflowRunLogsToolFactory } from './pi/tools/get-workflow-run-logs'
 export { updatePullRequestToolFactory } from './pi/tools/update-pr';
 
 // Version
-export { getActionVersion, getPiVersion } from './version';
+export { getActionVersion, getPiVersion, formatActionVersion } from './version';
+export type { ActionBuildInfo } from './version';
 
 // Types
 export type {
