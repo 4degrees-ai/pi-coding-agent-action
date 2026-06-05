@@ -44,7 +44,7 @@ export const mockGitHubContext = {
  */
 export function setupE2EGitHubMocks(): void {
   mock.module('@actions/github', () => ({ context: mockGitHubContext }));
-  process.env.INPUT_TRIGGER = '/pi';
+  process.env.INPUT_TRIGGER = '/pi ';
   process.env.INPUT_GITHUB_TOKEN = 'fake-token';
   process.env.INPUT_MAX_COMMENTS = '100';
 }
@@ -69,7 +69,7 @@ export function createE2ECoreAdapter(): CoreAdapter {
   const mockGetInput = mock((name: string): string => {
     const defaults: Record<string, string> = {
       github_token: 'fake-token',
-      trigger: '/pi',
+      trigger: '/pi ',
       max_comments: '100',
       provider: '',
       model: '',

@@ -26,7 +26,7 @@ export const GITHUB_IGNORE_PATTERNS = [
 ] as const;
 
 // Default trigger string
-export const DEFAULT_TRIGGER = '/pi';
+export const DEFAULT_TRIGGER = '/pi ';
 
 // GitHub max comments limit
 export const MAX_COMMENTS = 100;

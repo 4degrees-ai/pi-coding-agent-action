@@ -49,7 +49,7 @@ export interface GitHubModuleDeps {
   /** Logger for debug/info/warning output. */
   readonly logger: Logger;
   /**
-   * The trigger command string (e.g. '/pi') used to strip invocation prefixes
+   * The trigger command string (e.g. '/pi ') used to strip invocation prefixes
    * from comment bodies. When omitted, defaults to {@link DEFAULT_TRIGGER}.
    */
   readonly trigger?: string;

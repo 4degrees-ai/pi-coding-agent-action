@@ -31,9 +31,9 @@ inputs:
     required: false
 
   trigger:
-    description: 'Trigger phrase for the pi agent (e.g. /pi)'
+    description: 'Trigger phrase for the pi agent (e.g. /pi )'
     required: false
-    default: '/pi'
+    default: '/pi '
 
   extensions:
     description: 'Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths.'

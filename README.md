@@ -8,8 +8,8 @@ Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 
 ## Features
 
-- **Issue assistance**: Prefix any new issue description and/or any issue comment with `/pi` to have the agent analyze the issue, generate a report and/or create a new PR with the fix
-- **PR assistance**: Prefix any PR comment, review comment or review message with `/pi` to have the agent review the pull request and/or to apply further changes
+- **Issue assistance**: Prefix any new issue description and/or any issue comment with `/pi ` to have the agent analyze the issue, generate a report and/or create a new PR with the fix
+- **PR assistance**: Prefix any PR comment, review comment or review message with `/pi ` to have the agent review the pull request and/or to apply further changes
 - **Automated code reviews**: Have Pi review every new pull request automatically
 - **Add Pi to your own pipelines**: (Optionally) generate prompt from upstream actions/workflows and have Pi do the work in background for you anywhere you like in your workflows
 - **Minimal batteries included**: Tries to follow Pi minimalistic phylosophy while providing a comfortable UX out of the box, e.g. pretty print of logs, auto replies to comments, and tools to interact efficiently with git and GitHub-compatible APIs.
@@ -449,7 +449,7 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
 | `thinking_level` | Model thinking level (off\|low\|medium\|high) | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
-| `trigger` | Trigger phrase used to invoke the action | No | /pi |
+| `trigger` | Trigger phrase used to invoke the action | No | /pi  |
 
 Refer to [Pi documentation](https://pi.dev/docs/latest) for the current list of supported providers / models / etc.
 

@@ -91,8 +91,8 @@ export interface GitHubPlatformDeps {
   /** Logger for debug/info/warning output. */
   logger: Logger;
   /**
-   * Trigger command string (e.g. '/pi') for stripping invocation prefixes.
-   * When omitted, defaults to '/pi'.
+   * Trigger command string (e.g. '/pi ') for stripping invocation prefixes.
+   * When omitted, defaults to '/pi '.
    */
   trigger?: string;
   /**

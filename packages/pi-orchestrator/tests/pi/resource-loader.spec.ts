@@ -14,7 +14,7 @@ const mockCoreAdapter = {
   getInput: mock((name: string) => {
     const defaults: Record<string, string> = {
       github_token: 'fake-token',
-      trigger: '/pi',
+      trigger: '/pi ',
       max_comments: '100',
     };
     return defaults[name] ?? '';
@@ -32,7 +32,7 @@ const mockCoreAdapter = {
 const mockPlatformProvider = createMockProvider();
 
 // Set env vars before importing
-process.env.INPUT_TRIGGER = '/pi';
+process.env.INPUT_TRIGGER = '/pi ';
 process.env.INPUT_GITHUB_TOKEN = 'fake-token';
 process.env.INPUT_MAX_COMMENTS = '100';
 

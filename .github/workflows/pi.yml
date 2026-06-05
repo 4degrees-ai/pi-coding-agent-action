@@ -23,7 +23,7 @@ permissions:
 jobs:
   pi-agent:
     if: |
-      (startsWith(github.event.comment.body, '/pi') || startsWith(github.event.review.body, '/pi')) &&
+      (startsWith(github.event.comment.body, '/pi ') || startsWith(github.event.review.body, '/pi ')) &&
       (inputs.allowed_actor == '' || github.actor == inputs.allowed_actor)
 
     runs-on: ubuntu-latest

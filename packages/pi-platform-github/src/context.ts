@@ -19,7 +19,7 @@ import type { GitHubModuleDeps, IssueOrPullRequestContext } from './types';
  * Reads the trigger directly from the deps bag. When omitted,
  * falls back to {@link DEFAULT_TRIGGER}.
  *
- * @returns The trigger string (default '/pi' if not specified).
+ * @returns The trigger string (default '/pi ' if not specified).
  */
 function getTrigger(deps: GitHubModuleDeps): string {
   return deps.trigger ?? DEFAULT_TRIGGER;

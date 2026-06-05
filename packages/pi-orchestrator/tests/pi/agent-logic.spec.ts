@@ -55,7 +55,7 @@ const mockGetInput = mock((name: string) => {
     return 'fake-token';
   }
   if (name === 'trigger') {
-    return '/pi';
+    return '/pi ';
   }
   if (name === 'max_comments') {
     return '100';
@@ -64,7 +64,7 @@ const mockGetInput = mock((name: string) => {
 });
 
 // Set env vars before importing any modules that use them
-process.env.INPUT_TRIGGER = '/pi';
+process.env.INPUT_TRIGGER = '/pi ';
 process.env.INPUT_GITHUB_TOKEN = 'fake-token';
 process.env.INPUT_MAX_COMMENTS = '100';
 

@@ -23,7 +23,7 @@ installGithubEnv();
 // Mock @actions/core via shared helper
 import { coreMock, registerCoreMock } from '../helpers/core-mock';
 registerCoreMock();
-coreMock.getInput.mockImplementation(() => '/pi');
+coreMock.getInput.mockImplementation(() => '/pi ');
 
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { createMockProvider } from '../helpers/tool-mocks';

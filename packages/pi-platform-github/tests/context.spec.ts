@@ -30,7 +30,7 @@ function createTestDeps(contextOverrides: Partial<PlatformContext> = {}): GitHub
       notice: noop,
       error: noop,
     },
-    trigger: '/pi',
+    trigger: '/pi ',
   };
 }
 
@@ -220,7 +220,7 @@ describe('getPrompt', () => {
     const { getPrompt } = await contextModule;
     const deps = createTestDeps({
       payload: {
-        comment: { id: 1, body: '/pi' },
+        comment: { id: 1, body: '/pi ' },
       },
     });
 

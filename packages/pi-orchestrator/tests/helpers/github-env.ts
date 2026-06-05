@@ -23,7 +23,7 @@ import * as path from 'node:path';
 
 export interface InstallGithubEnvOptions {
   /**
-   * Value for `process.env.INPUT_TRIGGER`. Default `'/pi'`. Set to `false`
+   * Value for `process.env.INPUT_TRIGGER`. Default `'/pi '`. Set to `false`
    * to skip setting it (matches the legacy behavior of
    * `github-test-env.ts`'s `installGitHubEnv`).
    */
@@ -42,7 +42,7 @@ export interface InstallGithubEnvOptions {
  * (it's in `os.tmpdir()` and will be cleaned up by the OS).
  */
 export function installGithubEnv(options: InstallGithubEnvOptions = {}): string {
-  const { inputTrigger = '/pi', envPathPrefix = 'gh-event' } = options;
+  const { inputTrigger = '/pi ', envPathPrefix = 'gh-event' } = options;
   if (inputTrigger !== false) {
     process.env.INPUT_TRIGGER = inputTrigger;
   }
