@@ -192,7 +192,7 @@ jobs:
 
 ### Custom Extensions
 
-You can load custom Pi extensions to add additional tools, custom tools, or modify agent behavior:
+You can load custom Pi extensions to add additional custom tools or modify agent behavior:
 
 ```yaml
 - name: Run Pi agent with extensions
@@ -212,6 +212,8 @@ Supported extension sources:
 - **npm packages**: `npm:package-name` or `npm:package@version`
 - **git repositories**: `git:github.com/user/repo` (supports branches with `#branch`)
 - **local files**: Relative paths to `.ts` extension files
+
+Refer to <https://pi.dev/docs/latest/extensions> to know more about Pi's powerful extensions APIs.
 
 ### Custom Providers via `models.json`
 
