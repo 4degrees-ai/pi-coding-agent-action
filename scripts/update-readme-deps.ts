@@ -2,19 +2,22 @@
  * Updates the dependency versions table in README.md between
  * <!-- DEPS_TABLE_START --> and <!-- DEPS_TABLE_END --> markers.
  *
- * Reads runtime dependencies from package.json and resolves their
- * installed versions from node_modules. Designed to be run by the
- * package.yml workflow after `bun install`.
+ * Designed for the Bun-workspace monorepo: scans every package under packages/,
+ * merges their `dependencies` + `peerDependencies`, skips `workspace:*` links,
+ * and reads versions straight from each package.json (assumed to be kept in
+ * sync with what's actually installed).
+ *
+ * Wired into .github/workflows/package.yml so the table is refreshed whenever
+ * dist/ is rebuilt on develop.
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Use process.argv[1] to resolve script location (works in both Bun and Node)
 const scriptDir = __dirname;
-const README_PATH = join(scriptDir, '..', 'README.md');
-const PACKAGE_JSON_PATH = join(scriptDir, '..', 'package.json');
-const NODE_MODULES_DIR = join(scriptDir, '..', 'node_modules');
+const REPO_ROOT = join(scriptDir, '..');
+const README_PATH = join(REPO_ROOT, 'README.md');
+const PACKAGES_DIR = join(REPO_ROOT, 'packages');
 
 const MARKER_START = '<!-- DEPS_TABLE_START -->';
 const MARKER_END = '<!-- DEPS_TABLE_END -->';
@@ -27,29 +30,73 @@ interface DepInfo {
 
 /** Friendly descriptions for known dependencies */
 const DEP_DESCRIPTIONS: Record<string, string> = {
+  '@actions/core': 'GitHub Actions core I/O (inputs, outputs, logging)',
+  '@actions/github': 'GitHub API client (Octokit wrapper)',
   '@earendil-works/pi-agent-core': 'Pi Agent Core — agent orchestration primitives',
   '@earendil-works/pi-ai': 'Pi AI — AI model abstractions and providers',
   '@earendil-works/pi-coding-agent': 'Pi SDK — AI coding agent runtime',
-  '@actions/core': 'GitHub Actions core I/O (inputs, outputs, logging)',
-  '@actions/github': 'GitHub API client (Octokit wrapper)',
   '@js-temporal/polyfill': 'Temporal API polyfill',
   '@octokit/plugin-rest-endpoint-methods': 'Octokit REST API endpoint methods',
   ignore: '`.gitignore`-style pattern matching',
   typebox: 'JSON Schema Type Builder',
 };
 
-function getResolvedVersion(depName: string): string {
-  // Handle scoped packages: @scope/name → @scope/name/package.json
-  const pkgPath = join(NODE_MODULES_DIR, depName, 'package.json');
-  if (!existsSync(pkgPath)) {
-    return '—';
+function isWorkspaceSpec(spec: string): boolean {
+  return /^workspace:/.test(spec);
+}
+
+/** Strip npm range prefixes (^, ~, =, >=, >, <=, <) and tag suffixes. */
+function cleanVersion(spec: string): string {
+  return spec
+    .replace(/^[=~^<>]?=?\s*/, '')
+    .replace(/-.*$/, '')
+    .trim();
+}
+
+function readJson(path: string): unknown {
+  return JSON.parse(readFileSync(path, 'utf-8'));
+}
+
+function collectWorkspaceDeps(): Map<string, string> {
+  if (!existsSync(PACKAGES_DIR)) {
+    console.error(`packages directory not found at ${PACKAGES_DIR}`);
+    process.exit(1);
   }
-  try {
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    return pkg.version ?? '—';
-  } catch {
-    return '—';
+
+  const merged = new Map<string, string>();
+  for (const entry of readdirSync(PACKAGES_DIR)) {
+    const entryPath = join(PACKAGES_DIR, entry);
+    let isDir = false;
+    try {
+      isDir = statSync(entryPath).isDirectory();
+    } catch {
+      /* skip */
+    }
+    if (!isDir) {
+      continue;
+    }
+
+    const pkgJsonPath = join(entryPath, 'package.json');
+    if (!existsSync(pkgJsonPath)) {
+      continue;
+    }
+
+    const pkg = readJson(pkgJsonPath) as {
+      dependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
+
+    for (const [name, spec] of Object.entries(pkg.dependencies ?? {})) {
+      merged.set(name, spec);
+    }
+    // peerDependencies are also "shipped" deps from the consumer's POV
+    for (const [name, spec] of Object.entries(pkg.peerDependencies ?? {})) {
+      if (!merged.has(name)) {
+        merged.set(name, spec);
+      }
+    }
   }
+  return merged;
 }
 
 function generateTable(deps: DepInfo[]): string {
@@ -65,26 +112,19 @@ function main(): void {
     process.exit(1);
   }
 
-  if (!existsSync(PACKAGE_JSON_PATH)) {
-    console.error(`package.json not found at ${PACKAGE_JSON_PATH}`);
-    process.exit(1);
-  }
+  const allDeps = collectWorkspaceDeps();
 
-  // Read runtime dependencies
-  const pkg = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf-8'));
-  const dependencies: Record<string, string> = pkg.dependencies ?? {};
-
-  const deps: DepInfo[] = Object.keys(dependencies)
-    .sort()
-    .map(name => ({
+  const deps: DepInfo[] = Array.from(allDeps.entries())
+    .filter(([, spec]) => !isWorkspaceSpec(spec))
+    .map(([name, spec]) => ({
       name,
-      version: getResolvedVersion(name),
+      version: cleanVersion(spec),
       description: DEP_DESCRIPTIONS[name] ?? '',
-    }));
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const table = generateTable(deps);
 
-  // Read README and replace between markers
   const readme = readFileSync(README_PATH, 'utf-8');
   const startIdx = readme.indexOf(MARKER_START);
   const endIdx = readme.indexOf(MARKER_END);
