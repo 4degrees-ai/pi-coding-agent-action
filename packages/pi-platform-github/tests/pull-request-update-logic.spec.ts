@@ -1,24 +1,7 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
 
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: any[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
-
-// Set env vars BEFORE importing pull-request-update.ts
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
+import { setupGitHubTestEnv } from './helpers/github-test-env';
+setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-logic' });
 
 // Setup default GitHub context
 const mockContext = {
@@ -62,6 +45,527 @@ interface _UpdatePullRequestParams {
   message?: string;
   dryRun?: boolean;
 }
+
+describe('applyCommit', () => {
+  function createGitDeps() {
+    const createBlob = mock(() => Promise.resolve({ data: { sha: 'blob-sha' } }));
+    const createTree = mock(() => Promise.resolve({ data: { sha: 'tree-sha' } }));
+    const createCommit = mock(() => Promise.resolve({ data: { sha: 'commit-sha' } }));
+    const updateRef = mock(() => Promise.resolve({ data: {} }));
+    const getTree = mock(() => Promise.resolve({ data: { tree: [] } }));
+    const info = mock(() => {});
+    const debug = mock(() => {});
+    const logger = {
+      info,
+      debug,
+      warning: mock(() => {}),
+      notice: mock(() => {}),
+      error: mock(() => {}),
+    };
+
+    const deps = {
+      context: mockContext,
+      octokit: {
+        rest: {
+          git: {
+            createBlob,
+            createTree,
+            createCommit,
+            updateRef,
+            getTree,
+            getRef: mock(() => Promise.resolve({ data: { object: { sha: 'abc' } } })),
+            getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
+          },
+        },
+      },
+      logger,
+    } as any;
+    return { deps, createBlob, createTree, createCommit, updateRef, info, debug, logger };
+  }
+
+  test('returns undefined and logs when no changes to apply', async () => {
+    const module = await getModule();
+    const { applyCommit } = module;
+
+    const { deps, createBlob, createTree, createCommit, updateRef, info } = createGitDeps();
+
+    const sha = await applyCommit(deps, {
+      changedFiles: [],
+      deletedFiles: [],
+      headSha: 'abc',
+      headBranch: 'feat',
+      message: 'msg',
+      pullNumber: 42,
+      log: deps.logger,
+    });
+
+    expect(sha).toBeUndefined();
+    expect(info).toHaveBeenCalledWith(
+      'No code changes detected, only updating PR metadata if provided'
+    );
+    expect(createBlob).not.toHaveBeenCalled();
+    expect(createTree).not.toHaveBeenCalled();
+    expect(createCommit).not.toHaveBeenCalled();
+    expect(updateRef).not.toHaveBeenCalled();
+  });
+
+  test('creates blobs/tree, generates message, creates commit, updates branch', async () => {
+    const module = await getModule();
+    const { applyCommit } = module;
+
+    const { deps, createBlob, createTree, createCommit, updateRef, info } = createGitDeps();
+
+    const changedFiles = [
+      { path: 'a.ts', content: 'a', mode: '100644' as const },
+      { path: 'b.ts', content: 'b', mode: '100644' as const },
+    ];
+
+    const sha = await applyCommit(deps, {
+      changedFiles,
+      deletedFiles: ['old.ts'],
+      headSha: 'parent-sha',
+      headBranch: 'feat',
+      message: undefined, // force auto-generated message
+      pullNumber: 7,
+      log: deps.logger,
+    });
+
+    expect(sha).toBe('commit-sha');
+    expect(createBlob).toHaveBeenCalledTimes(2);
+    expect(createTree).toHaveBeenCalledTimes(1);
+    // commit message should be auto-generated
+    expect(createCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Update PR #7: 2 modified/new file(s), 1 deleted file(s)',
+      })
+    );
+    expect(updateRef).toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith('Created new commit commit-sha on branch feat');
+  });
+
+  test('uses explicit message when provided', async () => {
+    const module = await getModule();
+    const { applyCommit } = module;
+
+    const { deps, createCommit } = createGitDeps();
+
+    await applyCommit(deps, {
+      changedFiles: [{ path: 'a.ts', content: 'a', mode: '100644' as const }],
+      deletedFiles: [],
+      headSha: 'parent',
+      headBranch: 'feat',
+      message: 'Custom: fix stuff',
+      pullNumber: 1,
+      log: deps.logger,
+    });
+
+    expect(createCommit).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Custom: fix stuff' })
+    );
+  });
+});
+
+describe('buildSuccessReport', () => {
+  const baseInput = {
+    pullNumber: 42,
+    prUrl: 'https://github.com/test-owner/test-repo/pull/42',
+    headBranch: 'feat',
+    baseBranch: 'main',
+    commitSha: undefined as string | undefined,
+    titleUpdated: undefined as boolean | undefined,
+    bodyUpdated: undefined as boolean | undefined,
+  };
+
+  function textOf(result: { content: { type: string; text: string }[] }) {
+    return result.content[0]!.text;
+  }
+
+  test('always includes header with PR number and URL; dryRun=false', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport(baseInput);
+    expect(textOf(out)).toBe(
+      'Pull request #42 updated: https://github.com/test-owner/test-repo/pull/42'
+    );
+    expect(out.details).toEqual({
+      pullRequestNumber: 42,
+      pullRequestUrl: baseInput.prUrl,
+      headBranch: 'feat',
+      baseBranch: 'main',
+      dryRun: false,
+    });
+  });
+
+  test('includes New commit line + details.commitSha when commitSha is set', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport({ ...baseInput, commitSha: 'abc123' });
+    expect(textOf(out)).toContain('- New commit: abc123');
+    expect(out.details.commitSha).toBe('abc123');
+  });
+
+  test('omits commit line when commitSha is undefined', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport(baseInput);
+    expect(textOf(out)).not.toContain('New commit');
+    expect(out.details.commitSha).toBeUndefined();
+  });
+
+  test('includes Title updated line + details.titleUpdated when true', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport({ ...baseInput, titleUpdated: true });
+    expect(textOf(out)).toContain('- Title updated');
+    expect(out.details.titleUpdated).toBe(true);
+  });
+
+  test('omits Title line when titleUpdated is undefined', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport(baseInput);
+    expect(textOf(out)).not.toContain('Title');
+    expect(out.details.titleUpdated).toBeUndefined();
+  });
+
+  test('includes Description updated line + details.bodyUpdated when true', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport({ ...baseInput, bodyUpdated: true });
+    expect(textOf(out)).toContain('- Description updated');
+    expect(out.details.bodyUpdated).toBe(true);
+  });
+
+  test('omits Description line when bodyUpdated is undefined', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport(baseInput);
+    expect(textOf(out)).not.toContain('Description');
+    expect(out.details.bodyUpdated).toBeUndefined();
+  });
+
+  test('all-three-set produces ordered lines and full details payload', async () => {
+    const module = await getModule();
+    const { buildSuccessReport } = module;
+
+    const out = buildSuccessReport({
+      ...baseInput,
+      commitSha: 'deadbeef',
+      titleUpdated: true,
+      bodyUpdated: true,
+    });
+    const lines = textOf(out).split('\n');
+    expect(lines).toEqual([
+      'Pull request #42 updated: https://github.com/test-owner/test-repo/pull/42',
+      '- New commit: deadbeef',
+      '- Title updated',
+      '- Description updated',
+    ]);
+    expect(out.details).toEqual({
+      pullRequestNumber: 42,
+      pullRequestUrl: baseInput.prUrl,
+      headBranch: 'feat',
+      baseBranch: 'main',
+      dryRun: false,
+      commitSha: 'deadbeef',
+      titleUpdated: true,
+      bodyUpdated: true,
+    });
+  });
+});
+
+describe('generateCommitMessage', () => {
+  test('returns explicit message as-is when truthy', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    expect(generateCommitMessage('Custom msg', [], [], 42)).toBe('Custom msg');
+  });
+
+  test('treats empty string as no message (generates default)', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    expect(generateCommitMessage('', [{ path: 'a.ts' }], [], 7)).toBe(
+      'Update PR #7: 1 modified/new file(s)'
+    );
+  });
+
+  test('treats undefined as no message (generates default)', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    expect(generateCommitMessage(undefined, [{ path: 'a.ts' }], [], 7)).toBe(
+      'Update PR #7: 1 modified/new file(s)'
+    );
+  });
+
+  test('only-changed case: includes only modified/new count', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    const out = generateCommitMessage(undefined, [{ path: 'a' }, { path: 'b' }], [], 99);
+    expect(out).toBe('Update PR #99: 2 modified/new file(s)');
+    expect(out).not.toContain('deleted');
+  });
+
+  test('only-deleted case: includes only deleted count', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    const out = generateCommitMessage(undefined, [], ['x.ts', 'y.ts'], 99);
+    expect(out).toBe('Update PR #99: 2 deleted file(s)');
+    expect(out).not.toContain('modified/new');
+  });
+
+  test('both-changed-and-deleted case: joins with comma', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    expect(
+      generateCommitMessage(undefined, [{ path: 'a' }, { path: 'b' }, { path: 'c' }], ['old'], 5)
+    ).toBe('Update PR #5: 3 modified/new file(s), 1 deleted file(s)');
+  });
+
+  test('both-empty case: produces trailing colon (preserves prior behavior)', async () => {
+    const module = await getModule();
+    const { generateCommitMessage } = module;
+
+    // Caller is expected to only invoke this when at least one list is non-empty,
+    // but we preserve the legacy output shape rather than throwing.
+    expect(generateCommitMessage(undefined, [], [], 1)).toBe('Update PR #1: ');
+  });
+});
+
+describe('buildDryRunReport', () => {
+  const baseInput = {
+    pullNumber: 42,
+    headBranch: 'feat',
+    baseBranch: 'main',
+    prUrl: 'https://github.com/test-owner/test-repo/pull/42',
+    changedFiles: [] as { path: string }[],
+    deletedFiles: [] as string[],
+  };
+
+  function textOf(result: { content: { type: string; text: string }[] }) {
+    return result.content[0]!.text;
+  }
+
+  test('always includes header and branch info', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport(baseInput);
+    expect(textOf(out)).toContain('[DRY RUN] Would update pull request #42:');
+    expect(textOf(out)).toContain('- Head branch: feat');
+    expect(textOf(out)).toContain('- Base branch: main');
+    expect(out.details.dryRun).toBe(true);
+    expect(out.details.pullRequestNumber).toBe(42);
+    expect(out.details.pullRequestUrl).toBe(baseInput.prUrl);
+    expect(out.details.headBranch).toBe('feat');
+    expect(out.details.baseBranch).toBe('main');
+  });
+
+  test('reports no code changes when both lists are empty', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport(baseInput);
+    expect(textOf(out)).toContain('- No code changes detected');
+    expect(textOf(out)).not.toContain('- Code changes:');
+  });
+
+  test('includes only modified count when changedFiles > 0', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({
+      ...baseInput,
+      changedFiles: [{ path: 'a.ts' }, { path: 'b.ts' }],
+    });
+    expect(textOf(out)).toContain('- Code changes:');
+    expect(textOf(out)).toContain('  - 2 modified/new file(s)');
+    expect(textOf(out)).not.toContain('deleted file(s)');
+  });
+
+  test('includes only deleted count when deletedFiles > 0', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({
+      ...baseInput,
+      deletedFiles: ['old.ts'],
+    });
+    expect(textOf(out)).toContain('- Code changes:');
+    expect(textOf(out)).toContain('  - 1 deleted file(s)');
+    expect(textOf(out)).not.toContain('modified/new file(s)');
+  });
+
+  test('includes both counts when both lists non-empty', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({
+      ...baseInput,
+      changedFiles: [{ path: 'a.ts' }, { path: 'b.ts' }, { path: 'c.ts' }],
+      deletedFiles: ['old.ts', 'older.ts'],
+    });
+    expect(textOf(out)).toContain('  - 3 modified/new file(s)');
+    expect(textOf(out)).toContain('  - 2 deleted file(s)');
+  });
+
+  test('omits title line when title is undefined', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({ ...baseInput, body: 'B' });
+    expect(textOf(out)).not.toContain('- Title:');
+    expect(textOf(out)).toContain('- Body: B');
+  });
+
+  test('omits body line when body is undefined', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({ ...baseInput, title: 'T' });
+    expect(textOf(out)).toContain('- Title: T');
+    expect(textOf(out)).not.toContain('- Body:');
+  });
+
+  test('includes both title and body when both provided', async () => {
+    const module = await getModule();
+    const { buildDryRunReport } = module;
+
+    const out = buildDryRunReport({ ...baseInput, title: 'T', body: 'B' });
+    expect(textOf(out)).toContain('- Title: T');
+    expect(textOf(out)).toContain('- Body: B');
+  });
+});
+
+describe('fetchPullRequestData', () => {
+  function createDeps(octokitGet: ReturnType<typeof mock>) {
+    return {
+      context: mockContext,
+      octokit: { rest: { pulls: { get: octokitGet } } },
+      logger: {
+        debug: mock(() => {}),
+        info: mock(() => {}),
+        warning: mock(() => {}),
+        notice: mock(() => {}),
+        error: mock(() => {}),
+      },
+    } as any;
+  }
+
+  test('returns branch info and URL on a 200 response', async () => {
+    const module = await getModule();
+    const { fetchPullRequestData } = module;
+
+    const get = mock(() =>
+      Promise.resolve({
+        status: 200,
+        data: {
+          number: 42,
+          head: { ref: 'feat', sha: 'abc' },
+          base: { ref: 'main' },
+          html_url: 'https://github.com/test-owner/test-repo/pull/42',
+        },
+      })
+    );
+
+    const info = await fetchPullRequestData(createDeps(get), 42);
+    expect(info).toEqual({
+      headBranch: 'feat',
+      baseBranch: 'main',
+      headSha: 'abc',
+      prUrl: 'https://github.com/test-owner/test-repo/pull/42',
+    });
+    expect(get).toHaveBeenCalledWith({
+      owner: 'test-owner',
+      repo: 'test-repo',
+      pull_number: 42,
+    });
+  });
+
+  test('throws when status is not 200', async () => {
+    const module = await getModule();
+    const { fetchPullRequestData } = module;
+
+    const get = mock(() => Promise.resolve({ status: 404, data: null }));
+    await expect(fetchPullRequestData(createDeps(get), 99)).rejects.toThrow(
+      /Could not fetch pull request #99/
+    );
+  });
+
+  test('throws when data is null despite 200', async () => {
+    const module = await getModule();
+    const { fetchPullRequestData } = module;
+
+    const get = mock(() => Promise.resolve({ status: 200, data: null }));
+    await expect(fetchPullRequestData(createDeps(get), 7)).rejects.toThrow(
+      /Could not fetch pull request #7/
+    );
+  });
+
+  test('propagates underlying octokit errors', async () => {
+    const module = await getModule();
+    const { fetchPullRequestData } = module;
+
+    const get = mock(() => Promise.reject(new Error('network down')));
+    await expect(fetchPullRequestData(createDeps(get), 1)).rejects.toThrow('network down');
+  });
+});
+
+describe('resolvePullRequestNumber', () => {
+  beforeEach(() => {
+    mockContext.issue = { number: 123 };
+  });
+
+  test('returns explicit pull_number when provided', async () => {
+    const module = await getModule();
+    const { resolvePullRequestNumber } = module;
+
+    const deps = { context: mockContext } as any;
+    expect(resolvePullRequestNumber(deps, 789)).toBe(789);
+  });
+
+  test('falls back to context.issue.number when pull_number is undefined', async () => {
+    const module = await getModule();
+    const { resolvePullRequestNumber } = module;
+
+    const deps = { context: mockContext } as any;
+    expect(resolvePullRequestNumber(deps, undefined)).toBe(123);
+  });
+
+  test('throws when neither pull_number nor context.issue.number is available', async () => {
+    const module = await getModule();
+    const { resolvePullRequestNumber } = module;
+
+    // @ts-expect-error -- Testing error handling when issue is undefined
+    mockContext.issue = undefined;
+    const deps = { context: mockContext } as any;
+
+    expect(() => resolvePullRequestNumber(deps, undefined)).toThrow(
+      'Pull request number not provided and not available in context'
+    );
+  });
+
+  test('explicit pull_number wins over context.issue.number', async () => {
+    const module = await getModule();
+    const { resolvePullRequestNumber } = module;
+
+    const deps = { context: mockContext } as any;
+    mockContext.issue = { number: 999 };
+    expect(resolvePullRequestNumber(deps, 1)).toBe(1);
+  });
+});
 
 describe('validateUpdatePullRequestParams', () => {
   beforeEach(() => {

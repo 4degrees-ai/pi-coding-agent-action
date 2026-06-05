@@ -6,8 +6,8 @@
 
 import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 import { resolveExtensions, getResourceLoader } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
 import { DefaultPackageManager, DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
+import { createMockProvider } from '../helpers/tool-mocks';
 
 // Mock CoreAdapter for testing
 const mockCoreAdapter = {
@@ -29,98 +29,51 @@ const mockCoreAdapter = {
 };
 
 // Mock platform provider for getResourceLoader
-const mockPlatformProvider: PlatformProvider = {
-  type: 'github',
-  getContext: () => ({
-    repo: { owner: 'test-owner', repo: 'test-repo' },
-    issue: { number: 1 },
-    eventName: 'issue_comment',
-    payload: {},
-    serverUrl: 'https://github.com',
-    runId: 123,
-    workspace: '/tmp',
-  }),
-  addReaction: async () => undefined,
-  deleteReaction: async () => {},
-  createFinalComment: async () => {},
-  getPrompt: async () => undefined,
-  getStartTime: () => undefined,
-  createPullRequest: async () => ({
-    content: [],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: 'main',
-      baseBranch: 'main',
-      dryRun: false,
-    },
-  }),
-  updatePullRequest: async () => ({
-    content: [],
-    details: {
-      pullRequestNumber: 1,
-      pullRequestUrl: '',
-      headBranch: 'main',
-      baseBranch: 'main',
-      dryRun: false,
-    },
-  }),
-  getIssueOrPRThread: async () => undefined,
-  getPRDiff: async () => '',
-  createReview: async () => ({
-    content: [{ type: 'text' as const, text: 'Review created' }],
-    details: {
-      reviewId: 1,
-      reviewUrl: '',
-      pullRequestNumber: 1,
-      event: 'COMMENT',
-      commentCount: 1,
-    },
-  }),
-  getCIStatus: async () => ({
-    content: [{ type: 'text' as const, text: 'CI status fetched' }],
-    details: {
-      ref: 'abc123',
-      check_runs: [],
-      workflow_runs: [],
-    },
-  }),
-  getWorkflowRunLogs: async () => ({
-    content: [{ type: 'text' as const, text: 'Workflow run logs fetched' }],
-    details: {
-      run_id: 0,
-      jobs: [],
-      total_bytes: 0,
-      truncated: false,
-    },
-  }),
-};
+const mockPlatformProvider = createMockProvider();
 
 // Set env vars before importing
 process.env.INPUT_TRIGGER = '/pi';
 process.env.INPUT_GITHUB_TOKEN = 'fake-token';
 process.env.INPUT_MAX_COMMENTS = '100';
 
+/**
+ * Install a mock `resolveExtensionSources` on `DefaultPackageManager.prototype`
+ * that returns one enabled extension per source. Returns the mock function
+ * and the cleanup function that restores the original implementation.
+ */
+function installMockResolveExtensionSources(): {
+  mockFn: ReturnType<typeof mock>;
+  restore: () => void;
+} {
+  const original = DefaultPackageManager.prototype.resolveExtensionSources;
+  const mockFn = mock(async (sources: string[]) => ({
+    extensions: sources.map((source, index) => ({
+      source,
+      path: `/tmp/extensions/${source.replace(/[^a-z0-9]/g, '-')}-${index}`,
+      enabled: true,
+    })),
+  }));
+  DefaultPackageManager.prototype.resolveExtensionSources = mockFn as any;
+  return {
+    mockFn,
+    restore: () => {
+      DefaultPackageManager.prototype.resolveExtensionSources = original;
+    },
+  };
+}
+
 describe('resolveExtensions', () => {
   let mockResolveExtensionSources: ReturnType<typeof mock>;
-  let originalResolveExtensionSources: typeof DefaultPackageManager.prototype.resolveExtensionSources;
+  let restoreResolveExtensionSources: () => void;
 
   beforeEach(() => {
-    // Store original method and mock it
-    originalResolveExtensionSources = DefaultPackageManager.prototype.resolveExtensionSources;
-    mockResolveExtensionSources = mock(async (sources: string[]) => ({
-      extensions: sources.map((source, index) => ({
-        source,
-        path: `/tmp/extensions/${source.replace(/[^a-z0-9]/g, '-')}-${index}`,
-        enabled: true,
-      })),
-    }));
-    DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
+    const installed = installMockResolveExtensionSources();
+    mockResolveExtensionSources = installed.mockFn;
+    restoreResolveExtensionSources = installed.restore;
   });
 
   afterEach(() => {
-    // Restore original method
-    DefaultPackageManager.prototype.resolveExtensionSources = originalResolveExtensionSources;
+    restoreResolveExtensionSources();
   });
 
   describe('when no extensions provided', () => {
@@ -286,21 +239,14 @@ describe('resolveExtensions', () => {
 
 describe('getResourceLoader', () => {
   let mockResolveExtensionSources: ReturnType<typeof mock>;
-  let originalResolveExtensionSources: typeof DefaultPackageManager.prototype.resolveExtensionSources;
+  let restoreResolveExtensionSources: () => void;
   let mockReload: ReturnType<typeof mock>;
   let originalReload: typeof DefaultResourceLoader.prototype.reload;
 
   beforeEach(() => {
-    // Store original method and mock it
-    originalResolveExtensionSources = DefaultPackageManager.prototype.resolveExtensionSources;
-    mockResolveExtensionSources = mock(async (sources: string[]) => ({
-      extensions: sources.map((source, index) => ({
-        source,
-        path: `/tmp/extensions/${source.replace(/[^a-z0-9]/g, '-')}-${index}`,
-        enabled: true,
-      })),
-    }));
-    DefaultPackageManager.prototype.resolveExtensionSources = mockResolveExtensionSources;
+    const installed = installMockResolveExtensionSources();
+    mockResolveExtensionSources = installed.mockFn;
+    restoreResolveExtensionSources = installed.restore;
 
     // Mock reload method to avoid CLI extension loading errors in tests
     // The Pi SDK's reload() tries to access CLI extension paths that
@@ -312,7 +258,7 @@ describe('getResourceLoader', () => {
 
   afterEach(() => {
     // Restore original methods
-    DefaultPackageManager.prototype.resolveExtensionSources = originalResolveExtensionSources;
+    restoreResolveExtensionSources();
     DefaultResourceLoader.prototype.reload = originalReload;
   });
 

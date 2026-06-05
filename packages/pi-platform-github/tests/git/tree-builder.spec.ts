@@ -1,24 +1,7 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
 
-// Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
-const realStdoutWrite = process.stdout.write.bind(process.stdout);
-const _mockedWrite = mock((...args: unknown[]) => {
-  const msg = String(args[0] ?? '');
-  if (msg.startsWith('::')) {
-    return true;
-  }
-  return realStdoutWrite(...(args as Parameters<typeof process.stdout.write>));
-});
-process.stdout.write = _mockedWrite as typeof process.stdout.write;
-
-// Set env vars BEFORE importing tree-builder.ts
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
+import { setupGitHubContextMock, defaultMockContext } from '../helpers/github-test-env';
+setupGitHubContextMock(defaultMockContext);
 
 // Mock octokit
 const mockCreateBlob = mock((params: any) =>
@@ -41,37 +24,18 @@ const mockOctokit = {
 };
 // octokit mock no longer needed - deps pattern
 
-// Setup default GitHub context
-const mockContext = {
-  repo: {
-    owner: 'test-owner',
-    repo: 'test-repo',
-  },
-  issue: {
-    number: 42,
-  },
-  serverUrl: 'https://github.com',
-  runId: 123456789,
-  payload: {},
-};
-
-// Mock @actions/github context
-mock.module('@actions/github', () => ({
-  context: mockContext,
-}));
-
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
 function createTestDeps(): GitHubModuleDeps {
   return {
     octokit: mockOctokit as any,
     context: {
-      repo: mockContext.repo,
-      issue: mockContext.issue,
+      repo: defaultMockContext.repo,
+      issue: defaultMockContext.issue,
       eventName: 'push',
       payload: {},
-      serverUrl: mockContext.serverUrl,
-      runId: mockContext.runId,
+      serverUrl: defaultMockContext.serverUrl,
+      runId: defaultMockContext.runId,
       workspace: '/tmp',
     },
     logger: {
@@ -92,7 +56,7 @@ describe('createBlobsAndTree', () => {
     mockCreateBlob.mockClear();
     mockCreateTree.mockClear();
     // Reset to default context
-    mockContext.repo = { owner: 'test-owner', repo: 'test-repo' };
+    defaultMockContext.repo = { owner: 'test-owner', repo: 'test-repo' };
   });
 
   test('creates blobs for changed files', async () => {

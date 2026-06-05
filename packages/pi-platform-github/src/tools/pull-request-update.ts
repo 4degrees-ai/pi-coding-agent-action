@@ -9,6 +9,7 @@
  */
 
 import type { GitHubModuleDeps, UpdatePullRequestParams, UpdatePullRequestDetails } from '../types';
+import type { Logger } from '@alexanderfortin/pi-orchestrator';
 import { MAX_TITLE_LENGTH } from '../constants';
 import {
   createLogger,
@@ -17,6 +18,7 @@ import {
   createCommitAndUpdateBranch,
   buildFileMap,
 } from '../git/index';
+import type { CreateBlobsAndTreeParams } from '../git/index';
 
 export interface UpdatePullRequestResult {
   content: { type: 'text'; text: string }[];
@@ -98,6 +100,268 @@ export function validateUpdatePullRequestParams(params: UpdatePullRequestParams)
 }
 
 /**
+ * Resolve the pull request number from explicit param or action context.
+ *
+ * @param deps - Module dependencies (provides `context.issue.number`).
+ * @param pullNumber - Explicit `pull_number` parameter, if provided.
+ * @returns The resolved PR number.
+ * @throws {Error} If no PR number can be resolved.
+ * @internal Exported for testing purposes.
+ */
+export function resolvePullRequestNumber(
+  deps: GitHubModuleDeps,
+  pullNumber: number | undefined
+): number {
+  const resolved = pullNumber ?? deps.context.issue?.number;
+  if (!resolved) {
+    throw new Error(
+      'Pull request number not provided and not available in context. ' +
+        'Please provide pull_number parameter or run this action in the context of a pull request.'
+    );
+  }
+  return resolved;
+}
+
+interface PullRequestBranchInfo {
+  headBranch: string;
+  baseBranch: string;
+  headSha: string;
+  prUrl: string;
+}
+
+/**
+ * Fetch a pull request via the GitHub REST API and extract the fields needed
+ * to update its branch (head/base ref, head SHA, HTML URL).
+ *
+ * @param deps - Module dependencies.
+ * @param pullNumber - PR number to fetch.
+ * @returns The PR's branch info and URL.
+ * @throws {Error} If the API call returns a non-200 status or no data.
+ * @internal Exported for testing purposes.
+ */
+export async function fetchPullRequestData(
+  deps: GitHubModuleDeps,
+  pullNumber: number
+): Promise<PullRequestBranchInfo> {
+  const owner = deps.context.repo.owner;
+  const repo = deps.context.repo.repo;
+  const log = createLogger(deps);
+
+  log.debug(`Fetching PR #${pullNumber}...`);
+  const prData = await deps.octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: pullNumber,
+  });
+
+  if (prData.status !== 200 || !prData.data) {
+    throw new Error(
+      `Could not fetch pull request #${pullNumber}. ` +
+        `Please verify the pull request number is correct and that you have access to this repository.`
+    );
+  }
+
+  return {
+    headBranch: prData.data.head.ref,
+    baseBranch: prData.data.base.ref,
+    headSha: prData.data.head.sha,
+    prUrl: prData.data.html_url,
+  };
+}
+
+/**
+ * Build the dry-run report (no side effects).
+ *
+ * Produces both the human-readable text content and the structured
+ * `details` payload describing what would happen if the PR update ran for
+ * real. The caller is responsible for any logging.
+ *
+ * @param input - Resolved PR number, branch info, and the change scan results.
+ * @returns The tool result to return to the caller.
+ * @internal Exported for testing purposes.
+ */
+export function buildDryRunReport(input: {
+  pullNumber: number;
+  title: string | undefined;
+  body: string | undefined;
+  headBranch: string;
+  baseBranch: string;
+  prUrl: string;
+  changedFiles: readonly { path: string }[];
+  deletedFiles: readonly string[];
+}): UpdatePullRequestResult {
+  const { pullNumber, title, body, headBranch, baseBranch, prUrl, changedFiles, deletedFiles } =
+    input;
+  const parts: string[] = [`[DRY RUN] Would update pull request #${pullNumber}:`];
+  if (title !== undefined) {
+    parts.push(`- Title: ${title}`);
+  }
+  if (body !== undefined) {
+    parts.push(`- Body: ${body}`);
+  }
+  parts.push(`- Head branch: ${headBranch}`);
+  parts.push(`- Base branch: ${baseBranch}`);
+  if (changedFiles.length > 0 || deletedFiles.length > 0) {
+    parts.push(`- Code changes:`);
+    if (changedFiles.length > 0) {
+      parts.push(`  - ${changedFiles.length} modified/new file(s)`);
+    }
+    if (deletedFiles.length > 0) {
+      parts.push(`  - ${deletedFiles.length} deleted file(s)`);
+    }
+  } else {
+    parts.push(`- No code changes detected`);
+  }
+
+  return {
+    content: [{ type: 'text' as const, text: parts.join('\n') }],
+    details: {
+      pullRequestNumber: pullNumber,
+      pullRequestUrl: prUrl,
+      headBranch,
+      baseBranch,
+      dryRun: true,
+    },
+  };
+}
+
+/**
+ * Resolve the commit message to use for a PR update.
+ *
+ * Returns `message` as-is when provided and non-empty; otherwise builds a
+ * descriptive default of the form
+ *   `Update PR #<n>: <a> modified/new file(s), <b> deleted file(s)`
+ * omitting either half when the corresponding list is empty.
+ *
+ * @internal Exported for testing purposes.
+ */
+export function generateCommitMessage(
+  message: string | undefined,
+  changedFiles: readonly { path: string }[],
+  deletedFiles: readonly string[],
+  pullNumber: number
+): string {
+  if (message) {
+    return message;
+  }
+  const changes: string[] = [];
+  if (changedFiles.length > 0) {
+    changes.push(`${changedFiles.length} modified/new file(s)`);
+  }
+  if (deletedFiles.length > 0) {
+    changes.push(`${deletedFiles.length} deleted file(s)`);
+  }
+  return `Update PR #${pullNumber}: ${changes.join(', ')}`;
+}
+
+/**
+ * Build the success report (no side effects).
+ *
+ * Composes both the human-readable summary and the structured `details`
+ * payload describing a successful (non-dry-run) PR update. The caller is
+ * responsible for any logging.
+ *
+ * @param input - Resolved PR number, branch info, and the outcomes of the
+ *                 commit / metadata-update steps.
+ * @returns The tool result to return to the caller.
+ * @internal Exported for testing purposes.
+ */
+export function buildSuccessReport(input: {
+  pullNumber: number;
+  prUrl: string;
+  headBranch: string;
+  baseBranch: string;
+  commitSha: string | undefined;
+  titleUpdated: boolean | undefined;
+  bodyUpdated: boolean | undefined;
+}): UpdatePullRequestResult {
+  const { pullNumber, prUrl, headBranch, baseBranch, commitSha, titleUpdated, bodyUpdated } = input;
+
+  const parts: string[] = [`Pull request #${pullNumber} updated: ${prUrl}`];
+  if (commitSha) {
+    parts.push(`- New commit: ${commitSha}`);
+  }
+  if (titleUpdated) {
+    parts.push(`- Title updated`);
+  }
+  if (bodyUpdated) {
+    parts.push(`- Description updated`);
+  }
+  const successMessage = parts.join('\n');
+
+  const details: UpdatePullRequestDetails = {
+    pullRequestNumber: pullNumber,
+    pullRequestUrl: prUrl,
+    headBranch,
+    baseBranch,
+    dryRun: false,
+  };
+  if (commitSha !== undefined) {
+    details.commitSha = commitSha;
+  }
+  if (titleUpdated) {
+    details.titleUpdated = titleUpdated;
+  }
+  if (bodyUpdated) {
+    details.bodyUpdated = bodyUpdated;
+  }
+
+  return {
+    content: [{ type: 'text' as const, text: successMessage }],
+    details,
+  };
+}
+
+/**
+ * Create blobs/tree/commit and update the PR branch.
+ *
+ * Wrapper around {@link createBlobsAndTree} + {@link generateCommitMessage} +
+ * {@link createCommitAndUpdateBranch}. Returns `undefined` when there are no
+ * file changes to apply.
+ *
+ * @returns The new commit SHA, or `undefined` when no changes were applied.
+ * @internal Exported for testing purposes.
+ */
+export async function applyCommit(
+  deps: GitHubModuleDeps,
+  args: {
+    changedFiles: CreateBlobsAndTreeParams['changedFiles'];
+    deletedFiles: string[];
+    headSha: string;
+    headBranch: string;
+    message: string | undefined;
+    pullNumber: number;
+    log: Logger;
+  }
+): Promise<string | undefined> {
+  const { changedFiles, deletedFiles, headSha, headBranch, message, pullNumber, log } = args;
+
+  if (changedFiles.length === 0 && deletedFiles.length === 0) {
+    log.info(`No code changes detected, only updating PR metadata if provided`);
+    return undefined;
+  }
+
+  const treeSha = await createBlobsAndTree(deps, {
+    changedFiles,
+    deletedFiles,
+    parentSha: headSha,
+    log,
+  });
+
+  const commitMessage = generateCommitMessage(message, changedFiles, deletedFiles, pullNumber);
+
+  const commitSha = await createCommitAndUpdateBranch(deps, {
+    treeSha,
+    parentSha: headSha,
+    branchName: headBranch,
+    message: commitMessage,
+    log,
+  });
+  log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
+  return commitSha;
+}
+
+/**
  * Update a pull request end-to-end.
  *
  * Orchestrates the full flow: fetches the PR and its branch, scans for changed
@@ -116,49 +380,24 @@ export async function updatePullRequest(
   deps: GitHubModuleDeps,
   params: UpdatePullRequestParams
 ): Promise<UpdatePullRequestResult> {
-  const { pull_number, title, body, message, dryRun } = params;
+  const { title, body, message, dryRun } = params;
   const log = createLogger(deps);
 
   // Validate input parameters early
   validateUpdatePullRequestParams(params);
 
   // Resolve PR number from context if not provided
-  const resolvedPullNumber = pull_number ?? deps.context.issue?.number;
-  if (!resolvedPullNumber) {
-    throw new Error(
-      'Pull request number not provided and not available in context. ' +
-        'Please provide pull_number parameter or run this action in the context of a pull request.'
-    );
-  }
+  const resolvedPullNumber = resolvePullRequestNumber(deps, params.pull_number);
 
   log.debug(`PR Number: ${resolvedPullNumber}`);
   log.debug(`Title: ${title ?? '(no change)'}`);
   log.debug(`Body: ${body ? '(provided)' : '(no change)'}`);
   log.debug(`DryRun: ${dryRun ?? false}`);
 
-  // Fetch PR details
-  const owner = deps.context.repo.owner;
-  const repo = deps.context.repo.repo;
-
-  log.debug(`Fetching PR #${resolvedPullNumber}...`);
-  const prData = await deps.octokit.rest.pulls.get({
-    owner,
-    repo,
-    pull_number: resolvedPullNumber,
-  });
-
-  // Verify we got a valid pull request (not an issue)
-  if (prData.status !== 200 || !prData.data) {
-    throw new Error(
-      `Could not fetch pull request #${resolvedPullNumber}. ` +
-        `Please verify the pull request number is correct and that you have access to this repository.`
-    );
-  }
-
-  const headBranch = prData.data.head.ref;
-  const baseBranch = prData.data.base.ref;
-  const headSha = prData.data.head.sha;
-  const prUrl = prData.data.html_url;
+  const { headBranch, baseBranch, headSha, prUrl } = await fetchPullRequestData(
+    deps,
+    resolvedPullNumber
+  );
 
   log.debug(`PR found: ${prUrl}`);
   log.debug(`Head branch: ${headBranch}`);
@@ -175,78 +414,29 @@ export async function updatePullRequest(
 
   // Dry run mode - report what would happen without making changes
   if (dryRun) {
-    const parts: string[] = [`[DRY RUN] Would update pull request #${resolvedPullNumber}:`];
-    if (title !== undefined) {
-      parts.push(`- Title: ${title}`);
-    }
-    if (body !== undefined) {
-      parts.push(`- Body: ${body}`);
-    }
-    parts.push(`- Head branch: ${headBranch}`);
-    parts.push(`- Base branch: ${baseBranch}`);
-    if (changedFiles.length > 0 || deletedFiles.length > 0) {
-      parts.push(`- Code changes:`);
-      if (changedFiles.length > 0) {
-        parts.push(`  - ${changedFiles.length} modified/new file(s)`);
-      }
-      if (deletedFiles.length > 0) {
-        parts.push(`  - ${deletedFiles.length} deleted file(s)`);
-      }
-    } else {
-      parts.push(`- No code changes detected`);
-    }
-
-    const dryRunMessage = parts.join('\n');
-    log.debug(dryRunMessage);
-
-    return {
-      content: [{ type: 'text' as const, text: dryRunMessage }],
-      details: {
-        pullRequestNumber: resolvedPullNumber,
-        pullRequestUrl: prUrl,
-        headBranch,
-        baseBranch,
-        dryRun: true,
-      },
-    };
-  }
-
-  let commitSha: string | undefined;
-  if (changedFiles.length > 0 || deletedFiles.length > 0) {
-    // Create blobs and tree
-    const treeSha = await createBlobsAndTree(deps, {
+    const result = buildDryRunReport({
+      pullNumber: resolvedPullNumber,
+      title,
+      body,
+      headBranch,
+      baseBranch,
+      prUrl,
       changedFiles,
       deletedFiles,
-      parentSha: headSha,
-      log,
     });
-
-    // Generate commit message
-    let commitMessage = message;
-    if (!commitMessage) {
-      // Generate a descriptive commit message based on the changes
-      const changes: string[] = [];
-      if (changedFiles.length > 0) {
-        changes.push(`${changedFiles.length} modified/new file(s)`);
-      }
-      if (deletedFiles.length > 0) {
-        changes.push(`${deletedFiles.length} deleted file(s)`);
-      }
-      commitMessage = `Update PR #${resolvedPullNumber}: ${changes.join(', ')}`;
-    }
-
-    // Create commit and update branch
-    commitSha = await createCommitAndUpdateBranch(deps, {
-      treeSha,
-      parentSha: headSha,
-      branchName: headBranch,
-      message: commitMessage,
-      log,
-    });
-    log.info(`Created new commit ${commitSha} on branch ${headBranch}`);
-  } else {
-    log.info(`No code changes detected, only updating PR metadata if provided`);
+    log.debug(result.content[0]!.text);
+    return result;
   }
+
+  const commitSha = await applyCommit(deps, {
+    changedFiles,
+    deletedFiles,
+    headSha,
+    headBranch,
+    message,
+    pullNumber: resolvedPullNumber,
+    log,
+  });
 
   // Update PR title/body if provided
   let titleUpdated = false;
@@ -271,40 +461,15 @@ export async function updatePullRequest(
     }
   }
 
-  const successParts: string[] = [`Pull request #${resolvedPullNumber} updated: ${prUrl}`];
-  if (commitSha) {
-    successParts.push(`- New commit: ${commitSha}`);
-  }
-  if (titleUpdated) {
-    successParts.push(`- Title updated`);
-  }
-  if (bodyUpdated) {
-    successParts.push(`- Description updated`);
-  }
-
-  const successMessage = successParts.join('\n');
-  log.info(`SUCCESS: ${successMessage}`);
-
-  const details: UpdatePullRequestDetails = {
-    pullRequestNumber: resolvedPullNumber,
-    pullRequestUrl: prUrl,
+  const result = buildSuccessReport({
+    pullNumber: resolvedPullNumber,
+    prUrl,
     headBranch,
     baseBranch,
-    dryRun: false,
-  };
-
-  if (commitSha !== undefined) {
-    details.commitSha = commitSha;
-  }
-  if (titleUpdated) {
-    details.titleUpdated = titleUpdated;
-  }
-  if (bodyUpdated) {
-    details.bodyUpdated = bodyUpdated;
-  }
-
-  return {
-    content: [{ type: 'text' as const, text: successMessage }],
-    details,
-  };
+    commitSha,
+    titleUpdated,
+    bodyUpdated,
+  });
+  log.info(`SUCCESS: ${result.content[0]!.text}`);
+  return result;
 }
