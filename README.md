@@ -4,11 +4,12 @@
   <a href="https://github.com/shaftoe/pi-coding-agent-action/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/shaftoe/pi-coding-agent-action?logo=github"></a>
   <a href="https://github.com/marketplace/actions/pi-github-action"><img alt="Marketplace" src="https://img.shields.io/badge/Marketplace-2C8EBB?logo=githubactions&logoColor=white"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white"></a>
-  <a href="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/build.yml"><img alt="Build" src="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/build.yml/badge.svg?branch=develop"></a>
+  <a href="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/build.yml"><img alt="Build" src="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/build.yml/badge.svg?branch=v2"></a>
   <a href="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/release.yml"><img alt="Release" src="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/release.yml/badge.svg?branch=v2"></a>
+  <a href="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/fallow.yml"><img src="https://img.shields.io/badge/self--analyzed-fallow-brightgreen" alt="Self analyzed"></a>
   <a href="https://github.com/shaftoe/pi-coding-agent-action/pulls"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen"></a>
   <a href="https://github.com/semantic-release/semantic-release"><img alt="semantic-release" src="https://img.shields.io/badge/semantic--release-e10079?logo=semantic-release"></a>
-  <a href="https://codecov.io/gh/shaftoe/pi-coding-agent-action/"><img alt="Codecov" src="https://codecov.io/gh/shaftoe/pi-coding-agent-action/branch/develop/graph/badge.svg"></a>
+  <a href="https://codecov.io/gh/shaftoe/pi-coding-agent-action/"><img alt="Codecov" src="https://codecov.io/gh/shaftoe/pi-coding-agent-action/branch/v2/graph/badge.svg"></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/github/license/shaftoe/pi-coding-agent-action"></a>
 </p>
 
@@ -249,6 +250,23 @@ See the [Custom Provider documentation](https://github.com/badlogic/pi-mono/blob
     model: my-model-v1
     token: ${{ secrets.LLM_API_KEY }}
 ```
+
+> [!TIP]
+> You might want to configure custom providers via the extension APIs with a package instead, e.g.:
+> 
+> ```yaml
+> - name: Run Pi agent
+>   uses: shaftoe/pi-coding-agent-action@v2
+>   with:
+>     github_token: ${{ secrets.GITHUB_TOKEN }}
+>     provider: my-llm
+>     model: my-model-v1
+>     token: ${{ secrets.LLM_API_KEY }}
+>     extensions: |
+>       git:github.com/user/my-custom-pi-tools.git
+> ```
+>
+> Refer to <https://pi.dev/docs/latest/custom-provider> for details.
 
 ### Disabling Built-in Extensions
 
