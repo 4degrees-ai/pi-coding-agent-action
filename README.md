@@ -43,7 +43,7 @@ This project goal is exactly that: to provide a short list of (opt-out) **opinio
 
 For all the rest you're free and encouraged to just configure the action environment as you would your *local* Pi instance, e.g. adding files to `~/.pi/agent/`, environment variables, etc., and more generally to compose workflow pipelines around this action's inputs and outputs to fullfill your specific needs.
 
-Refer to [the official Pi documentation](https://pi.dev./docs/latest) to learn how to tweak Pi to best fit your needs.
+Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn how to tweak Pi to best fit your needs.
 
 ## Disclaimer
 
