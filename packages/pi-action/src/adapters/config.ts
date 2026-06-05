@@ -5,11 +5,86 @@
  * `PiConfig` object. This is the GitHub Action frontend's implementation
  * of config gathering; other frontends (CLI, GitHub App) would provide
  * their own implementation.
+ *
+ * Structure:
+ *   - Parsing helpers (`parseBooleanInput`, `parsePositiveIntInput`,
+ *     `parseStringListInput`, `parseLoadedTools`) — pure functions over
+ *     raw string inputs. Exported so they can be unit-tested directly.
+ *   - `validateRequiredInputs` — throws descriptive errors when a
+ *     required input is missing. Error messages are exported as
+ *     constants so the contract is stable for callers (and snapshot tests).
+ *   - `gatherActionsConfig` — the entry point. Reads inputs, parses them,
+ *     assembles the final `PiConfig`.
  */
 
 import * as path from 'node:path';
 import * as core from '@actions/core';
 import type { PiConfig } from '@alexanderfortin/pi-orchestrator';
+
+// ---------------------------------------------------------------------------
+// Error message constants — keep stable; they are part of the public
+// contract documented in `action.yml` and surfaced to users in the
+// Actions log.
+// ---------------------------------------------------------------------------
+
+export const MISSING_PROVIDER_MESSAGE =
+  'Missing required input: `provider`. ' +
+  'Set it to your LLM provider (e.g. "anthropic", "openai", "google"). ' +
+  'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.';
+
+export const MISSING_MODEL_MESSAGE =
+  'Missing required input: `model`. ' +
+  'Set it to the desired model (e.g. "claude-sonnet-4-5", "gpt-4o"). ' +
+  'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.';
+
+// ---------------------------------------------------------------------------
+// Parsing helpers (pure functions)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a yes/no string into a boolean. Returns `defaultValue` when the
+ * input is empty. Only the literal string `'true'` (case-insensitive)
+ * maps to `true`; any other non-empty value maps to `false`.
+ */
+export function parseBooleanInput(raw: string, defaultValue: boolean): boolean {
+  return raw ? raw.toLowerCase() === 'true' : defaultValue;
+}
+
+/**
+ * Parse a string into a positive integer. Returns `undefined` when the
+ * input is empty, non-numeric, or ≤ 0.
+ */
+export function parsePositiveIntInput(raw: string): number | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = parseInt(raw, 10);
+  return parsed > 0 ? parsed : undefined;
+}
+
+/**
+ * Split a string into a trimmed, deduped list of non-empty items using
+ * `separator`. Returns `undefined` when the input is empty or contains
+ * only whitespace.
+ *
+ * @example
+ *   parseStringListInput('a\nb\nc', '\n')           // ['a', 'b', 'c']
+ *   parseStringListInput('a b  c', /\s+/)           // ['a', 'b', 'c']
+ *   parseStringListInput('', '\n')                  // undefined
+ */
+export function parseStringListInput(
+  raw: string,
+  separator: string | RegExp
+): string[] | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const items = raw
+    .split(separator)
+    .map(s => s.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
+}
 
 /**
  * Parse the `loaded_tools` input.
@@ -20,7 +95,7 @@ import type { PiConfig } from '@alexanderfortin/pi-orchestrator';
  * Whitespace around tool names is trimmed. Empty items after splitting are
  * discarded. Duplicate names are deduplicated.
  */
-function parseLoadedTools(input: string): string[] | undefined {
+export function parseLoadedTools(input: string): string[] | undefined {
   const trimmed = input?.trim();
   if (!trimmed || trimmed.toLowerCase() === 'all') {
     return undefined;
@@ -32,6 +107,30 @@ function parseLoadedTools(input: string): string[] | undefined {
   return tools.length > 0 ? [...new Set(tools)] : undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Throw descriptive errors for missing required inputs. Preserves exact
+ * message text — these strings are part of the public contract.
+ *
+ * Exported so error messages can be asserted against without exercising
+ * the full config-gathering pipeline.
+ */
+export function validateRequiredInputs(provider: string, model: string): void {
+  if (!provider) {
+    throw new Error(MISSING_PROVIDER_MESSAGE);
+  }
+  if (!model) {
+    throw new Error(MISSING_MODEL_MESSAGE);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
 /**
  * Gather configuration from GitHub Action inputs.
  *
@@ -42,80 +141,44 @@ function parseLoadedTools(input: string): string[] | undefined {
  * @returns A fully populated PiConfig object.
  */
 export function gatherActionsConfig(): PiConfig {
+  // --- Required inputs ----------------------------------------------------
   const provider = core.getInput('provider');
   const model = core.getInput('model');
   const token = core.getInput('token');
 
-  if (!provider) {
-    throw new Error(
-      'Missing required input: `provider`. ' +
-        'Set it to your LLM provider (e.g. "anthropic", "openai", "google"). ' +
-        'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
-    );
-  }
-
-  if (!model) {
-    throw new Error(
-      'Missing required input: `model`. ' +
-        'Set it to the desired model (e.g. "claude-sonnet-4-5", "gpt-4o"). ' +
-        'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.'
-    );
-  }
+  validateRequiredInputs(provider, model);
 
   if (!token) {
     core.debug('[config] No token provided — relying on provider-side auth (e.g. ADC)');
   }
 
-  const extensionsInput = core.getInput('extensions');
-  const extensions = extensionsInput
-    ? extensionsInput
-        .split('\n')
-        .map(s => s.trim())
-        .filter(Boolean)
-    : undefined;
-
-  const loadBuiltinExtensionsInput = core.getInput('load_builtin_extensions');
-  const loadBuiltinExtensions = loadBuiltinExtensionsInput
-    ? loadBuiltinExtensionsInput.toLowerCase() === 'true'
-    : true; // default to true
-
-  const loadedToolsInput = core.getInput('loaded_tools');
-  const loadedTools = parseLoadedTools(loadedToolsInput);
-
+  // --- Optional string inputs --------------------------------------------
+  const promptInput = core.getInput('prompt');
+  const thinkingLevel = core.getInput('thinking_level') ?? 'off';
   const baseUrl = core.getInput('base_url') || undefined;
 
-  const exportSessionHtmlInput = core.getInput('export_session_html');
-  const exportSessionHtml = exportSessionHtmlInput
-    ? exportSessionHtmlInput.toLowerCase() === 'true'
-    : true; // default to true
+  // --- Optional list inputs ----------------------------------------------
+  const extensions = parseStringListInput(core.getInput('extensions'), '\n');
+  const diffIgnorePatterns = parseStringListInput(core.getInput('diff_ignore_patterns'), /\s+/);
+  const loadedTools = parseLoadedTools(core.getInput('loaded_tools'));
 
-  const exportSessionJsonlInput = core.getInput('export_session_jsonl');
-  const exportSessionJsonl = exportSessionJsonlInput
-    ? exportSessionJsonlInput.toLowerCase() === 'true'
-    : false; // default to false
+  // --- Optional boolean inputs -------------------------------------------
+  const loadBuiltinExtensions = parseBooleanInput(core.getInput('load_builtin_extensions'), true);
+  const exportSessionHtml = parseBooleanInput(core.getInput('export_session_html'), true);
+  const exportSessionJsonl = parseBooleanInput(core.getInput('export_session_jsonl'), false);
+  const autoCompaction = parseBooleanInput(core.getInput('auto_compaction'), false);
 
-  const autoCompactionInput = core.getInput('auto_compaction');
-  const autoCompaction = autoCompactionInput ? autoCompactionInput.toLowerCase() === 'true' : false; // default to false
+  // --- Optional positive-integer inputs ----------------------------------
+  const diffMaxLines = parsePositiveIntInput(core.getInput('diff_max_lines'));
+  const diffMaxBytes = parsePositiveIntInput(core.getInput('diff_max_bytes'));
 
-  const diffMaxLinesInput = core.getInput('diff_max_lines');
-  const parsedLines = diffMaxLinesInput ? parseInt(diffMaxLinesInput, 10) : NaN;
-  const diffMaxLines = parsedLines > 0 ? parsedLines : undefined;
-
-  const diffMaxBytesInput = core.getInput('diff_max_bytes');
-  const parsedBytes = diffMaxBytesInput ? parseInt(diffMaxBytesInput, 10) : NaN;
-  const diffMaxBytes = parsedBytes > 0 ? parsedBytes : undefined;
-
-  const diffIgnorePatternsInput = core.getInput('diff_ignore_patterns');
-  const diffIgnorePatterns = diffIgnorePatternsInput
-    ? diffIgnorePatternsInput.split(/\s+/).filter(Boolean)
-    : undefined;
-
+  // --- Assemble PiConfig (only include optional keys when set) -----------
   return {
     provider,
     model,
     token,
-    thinkingLevel: core.getInput('thinking_level') ?? 'off',
-    promptInput: core.getInput('prompt'),
+    thinkingLevel,
+    promptInput,
     ...(extensions?.length ? { extensions } : {}),
     loadBuiltinExtensions,
     ...(loadedTools ? { loadedTools } : {}),

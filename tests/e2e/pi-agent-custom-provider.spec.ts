@@ -73,7 +73,7 @@ const TEST_PROVIDER = `e2e-custom-${E2E_PROVIDER}`;
  * Absolute path to the custom-provider fixture extension.
  * The extension reads E2E_*_CUSTOM env vars at runtime.
  */
-const CUSTOM_PROVIDER_EXTENSION = resolve(__dirname, '../fixtures/extensions/custom-provider.ts');
+const CUSTOM_PROVIDER_EXTENSION = resolve(__dirname, './fixtures/extensions/custom-provider.ts');
 
 // ============================================================================
 // Shared logger mock

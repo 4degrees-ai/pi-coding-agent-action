@@ -4,6 +4,13 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import ignore from 'ignore';
 
+import { installGithubEnv } from '../../pi-orchestrator/tests/helpers/github-env';
+import {
+  setupComparisonFixture,
+  setupIgnorePatternsFixture,
+  setupModifiedFileFixture,
+} from '../../pi-orchestrator/tests/fixtures/scanner-fixtures';
+
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
 const realStdoutWrite = process.stdout.write.bind(process.stdout);
 const _mockedWrite = mock((...args: unknown[]) => {
@@ -21,11 +28,7 @@ const debugLogger = (msg: string): void => {
 };
 
 // Set env vars BEFORE importing git-utils.ts
-process.env.INPUT_TRIGGER = '/pi';
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
+installGithubEnv();
 
 // Dynamic import to ensure mocks are set before module loads
 const gitUtilsModule = import('@alexanderfortin/pi-platform-github');
@@ -126,11 +129,9 @@ describe('scanForChanges', () => {
 
   test('detects modified files', async () => {
     // Create reference and modify it
-    const referenceFiles = new Map([['test.txt', { sha: 'abc123', content: 'old content' }]]);
+    const { reference } = setupModifiedFileFixture(tempDir);
 
-    fs.writeFileSync(path.join(tempDir, 'test.txt'), 'new content');
-
-    const result = await scanRef(referenceFiles);
+    const result = await scanRef(reference);
 
     expectSingleChanged(result, 'test.txt', 'new content');
     expect(result.deletedFiles).toHaveLength(0);
@@ -491,11 +492,7 @@ describe('scanDirectory', () => {
   });
 
   test('respects ignore patterns', async () => {
-    fs.writeFileSync(path.join(tempDir, 'included.txt'), 'included');
-    fs.writeFileSync(path.join(tempDir, 'excluded.txt'), 'excluded');
-
-    const ig = ignore();
-    ig.add('excluded.txt');
+    const { ig } = setupIgnorePatternsFixture(tempDir);
 
     const result = await scanDir(new Map<string, { sha: string; content: string | null }>(), ig);
 
@@ -505,17 +502,12 @@ describe('scanDirectory', () => {
   });
 
   test('compares files with reference', async () => {
-    fs.writeFileSync(path.join(tempDir, 'unchanged.txt'), 'same');
-    fs.writeFileSync(path.join(tempDir, 'changed.txt'), 'different');
-    fs.writeFileSync(path.join(tempDir, 'new.txt'), 'new');
+    const { reference } = setupComparisonFixture(tempDir);
+    // git.spec variant: include a deleted entry (file in reference but
+    // not on disk) to exercise the scanner's deleted-file tracking.
+    reference.set('deleted.txt', { sha: 'ghi789', content: 'deleted' });
 
-    const referenceFiles = new Map([
-      ['unchanged.txt', { sha: 'abc123', content: 'same' }],
-      ['changed.txt', { sha: 'def456', content: 'old' }],
-      ['deleted.txt', { sha: 'ghi789', content: 'deleted' }],
-    ]);
-
-    const result = await scanDir(referenceFiles);
+    const result = await scanDir(reference);
 
     // Should find changed.txt and new.txt as changed
     expect(result.changedFiles).toHaveLength(2);

@@ -1,7 +1,4 @@
 import { describe, expect, test, mock, beforeEach } from 'bun:test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
 
 // Swallow ::notice:: / ::warning:: / ::debug:: annotations from @actions/core
 // so they don't appear as CI annotations in test output.
@@ -20,11 +17,8 @@ process.stdout.write = _mockedWrite as typeof process.stdout.write;
 
 // Set env vars BEFORE importing tools (which transitively imports github.ts,
 // which runs module-level code calling getOctokit at load time).
-process.env.INPUT_TRIGGER = '/pi';
-process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-process.env.GITHUB_EVENT_PATH = path.join(os.tmpdir(), `gh-event-${Date.now()}.json`);
-fs.writeFileSync(process.env.GITHUB_EVENT_PATH, '{}');
+import { installGithubEnv } from '../helpers/github-env';
+installGithubEnv();
 
 // Mock @actions/core via shared helper
 import { coreMock, registerCoreMock } from '../helpers/core-mock';

@@ -12,6 +12,12 @@ import * as os from 'node:os';
 import ignore from 'ignore';
 import { scanForChanges, scanDirectory } from '@alexanderfortin/pi-orchestrator';
 import type { Logger } from '@alexanderfortin/pi-orchestrator';
+import {
+  expectChangedPaths,
+  setupComparisonFixture,
+  setupIgnorePatternsFixture,
+  setupModifiedFileFixture,
+} from '../fixtures/scanner-fixtures';
 
 /**
  * A simple console-capturing logger for tests.
@@ -72,10 +78,9 @@ describe('shared file scanner (platform-agnostic)', () => {
     });
 
     test('detects modified files', async () => {
-      const referenceFiles = new Map([['test.txt', { sha: 'abc123', content: 'old content' }]]);
-      fs.writeFileSync(path.join(tempDir, 'test.txt'), 'new content');
+      const { reference } = setupModifiedFileFixture(tempDir);
 
-      const result = await scanForChanges(referenceFiles, log, { repoRoot: tempDir });
+      const result = await scanForChanges(reference, log, { repoRoot: tempDir });
 
       expect(result.changedFiles).toHaveLength(1);
       expect(result.changedFiles[0]?.content).toBe('new content');
@@ -166,11 +171,7 @@ describe('shared file scanner (platform-agnostic)', () => {
     });
 
     test('respects ignore patterns', async () => {
-      fs.writeFileSync(path.join(tempDir, 'included.txt'), 'included');
-      fs.writeFileSync(path.join(tempDir, 'excluded.txt'), 'excluded');
-
-      const ig = ignore();
-      ig.add('excluded.txt');
+      const { ig } = setupIgnorePatternsFixture(tempDir);
 
       const result = await scanDirectory({
         dir: tempDir,
@@ -218,26 +219,17 @@ describe('shared file scanner (platform-agnostic)', () => {
     });
 
     test('compares files with reference', async () => {
-      fs.writeFileSync(path.join(tempDir, 'unchanged.txt'), 'same');
-      fs.writeFileSync(path.join(tempDir, 'changed.txt'), 'different');
-      fs.writeFileSync(path.join(tempDir, 'new.txt'), 'new');
-
-      const referenceFiles = new Map([
-        ['unchanged.txt', { sha: 'abc123', content: 'same' }],
-        ['changed.txt', { sha: 'def456', content: 'old' }],
-      ]);
+      const { reference } = setupComparisonFixture(tempDir);
 
       const result = await scanDirectory({
         dir: tempDir,
         relativePath: '',
-        referenceFiles,
+        referenceFiles: reference,
         ig: ignore(),
         log,
       });
 
-      expect(result.changedFiles).toHaveLength(2);
-      expect(result.changedFiles.some(f => f.path === 'changed.txt')).toBe(true);
-      expect(result.changedFiles.some(f => f.path === 'new.txt')).toBe(true);
+      expectChangedPaths(result, ['changed.txt', 'new.txt']);
       expect(result.changedFiles.some(f => f.path === 'unchanged.txt')).toBe(false);
     });
   });

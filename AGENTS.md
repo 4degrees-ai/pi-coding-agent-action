@@ -22,7 +22,7 @@ Monorepo managed with Bun workspaces (`packages/*`):
   - `src/adapters/` — GitHub-Actions-specific adapters: `CoreAdapter` (`@actions/core`), `GitAdapter`, `PiAgentAdapter`, `ConfigAdapter`, `OutputSink`.
   - `scripts/package.ts` — esbuild bundling for the action release artifact.
 
-- **`tests/`** (root) — E2E tests (`tests/e2e/`) and shared fixtures (`tests/fixtures/`).
+- **`tests/`** (root) — E2E tests (`tests/e2e/`) plus their local fixtures (`tests/e2e/fixtures/`).
 - **`scripts/`** (root) — Repo-level tooling (changelog, version sync, readme deps).
 
 ## Important Notes for Agents
@@ -33,7 +33,7 @@ Monorepo managed with Bun workspaces (`packages/*`):
    ```
    This runs ESLint, TypeScript type checking, and Prettier formatting.
 
-2. **Test Convention**: Tests live in each package's `tests/` directory (`packages/<pkg>/tests/`) plus root `tests/` for e2e/fixtures. All test files use the Bun `*.spec.ts` convention.
+2. **Test Convention**: Tests live in each package's `tests/` directory (`packages/<pkg>/tests/`) plus root `tests/` for e2e. All test files use the Bun `*.spec.ts` convention.
 
 3. **Orchestrator Testing**: Business logic is tested in `packages/pi-orchestrator/tests/orchestrator.spec.ts`. When modifying orchestration behavior, update these tests. Do **not** test mocks directly—test the actual business logic flow.
 

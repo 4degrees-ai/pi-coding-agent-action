@@ -17,11 +17,9 @@
  */
 
 import { mock } from 'bun:test';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 
 import { coreMock, registerCoreMock } from '../../../pi-orchestrator/tests/helpers/core-mock';
+import { installGithubEnv } from '../../../pi-orchestrator/tests/helpers/github-env';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 
 export { coreMock };
@@ -106,15 +104,16 @@ export function registerGitHubContextMock(overrides: Record<string, unknown> = {
 
 /**
  * Write an empty GitHub event JSON file to a unique OS temp path and return
- * the path. Also sets `GITHUB_REPOSITORY` and `INPUT_GITHUB_TOKEN`.
+ * the path. Also sets `GITHUB_REPOSITORY` and `INPUT_GITHUB_TOKEN`. Delegates
+ * to the shared `installGithubEnv` helper in `pi-orchestrator/tests/helpers/`
+ * (passing `inputTrigger: false` to preserve the legacy behavior of NOT
+ * setting `INPUT_TRIGGER` — most callers configure it themselves).
+ *
+ * Re-exported here so existing callers within `pi-platform-github` don't
+ * need a deeper relative import.
  */
 export function installGitHubEnv(envPathPrefix = 'gh-event'): string {
-  process.env.INPUT_GITHUB_TOKEN = 'fake-token';
-  process.env.GITHUB_REPOSITORY = 'test-owner/test-repo';
-  const eventPath = path.join(os.tmpdir(), `${envPathPrefix}-${Date.now()}.json`);
-  fs.writeFileSync(eventPath, JSON.stringify({}));
-  process.env.GITHUB_EVENT_PATH = eventPath;
-  return eventPath;
+  return installGithubEnv({ envPathPrefix, inputTrigger: false });
 }
 
 export interface SetupGitHubTestEnvOptions {
