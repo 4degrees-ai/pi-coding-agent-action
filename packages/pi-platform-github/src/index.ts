@@ -60,6 +60,7 @@ export {
   slugify,
   validateCreatePullRequestParams,
   validateBranchName,
+  findInvalidRefPattern,
 } from './tools/pull-request';
 
 export {
@@ -68,19 +69,30 @@ export {
   resolvePullRequestNumber,
   fetchPullRequestData,
   buildDryRunReport,
+  formatChangeSummary,
   generateCommitMessage,
   buildSuccessReport,
+  buildSuccessDetails,
   applyCommit,
+  applyMetadataUpdate,
+  logUpdateDebugStart,
+  logPRFoundDebug,
 } from './tools/pull-request-update';
 
-export { createReview, validateCreateReviewParams, toGitHubComment } from './tools/review';
+export {
+  createReview,
+  validateCreateReviewParams,
+  validateReviewComment,
+  validateReviewEvent,
+  toGitHubComment,
+} from './tools/review';
 
 // Thread and diff fetching (used by provider and tools)
-export { getIssueOrPRThread } from './tools/thread';
+export { getIssueOrPRThread, mapReviewComment } from './tools/thread';
 export { fetchPRDiff, matchesIgnorePattern, filterDiffByIgnoreFiles } from './tools/pr-diff';
 
 // CI/CD status
-export { getCIStatus } from './tools/get-ci-status';
+export { getCIStatus, buildCIStatusSummary } from './tools/get-ci-status';
 
 // CI utils
 export { getStatusIcon } from './tools/ci-utils';

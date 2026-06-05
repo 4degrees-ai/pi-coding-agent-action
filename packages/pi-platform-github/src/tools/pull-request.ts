@@ -98,6 +98,80 @@ const INVALID_REF_PATTERNS: readonly (string | RegExp)[] = [
 ];
 
 /**
+ * Rule for validating a git ref name. Returns the validation error message
+ * when the rule fails, or `null` when the name passes the rule.
+ */
+interface BranchNameRule {
+  readonly message: (name: string) => string;
+  check(name: string): boolean;
+}
+
+/**
+ * Compose the rules for `git-check-ref-format` once at module load.
+ */
+function buildBranchNameRules(): BranchNameRule[] {
+  return [
+    {
+      message: () => 'Branch name cannot be empty',
+      check: name => !name,
+    },
+    {
+      message: name =>
+        `Invalid branch name "${name}": branch name cannot start or end with a dot (.)`,
+      check: name => name.startsWith('.') || name.endsWith('.'),
+    },
+    {
+      message: name => `Invalid branch name "${name}": branch name cannot start with a dash (-)`,
+      check: name => name.startsWith('-'),
+    },
+    {
+      message: name =>
+        `Invalid branch name "${name}": branch name cannot start or end with a slash (/)`,
+      check: name => name.startsWith('/') || name.endsWith('/'),
+    },
+    {
+      message: name => `Invalid branch name "${name}": branch name cannot end with ".lock"`,
+      check: name => name.endsWith('.lock'),
+    },
+    {
+      message: name =>
+        `Invalid branch name "${name}": branch name cannot contain consecutive slashes (//)`,
+      check: name => name.includes('//'),
+    },
+    {
+      message: name => `Invalid branch name "${name}": component cannot end with a dot (.)`,
+      check: name => /(?:^|\/)[^.]*\.(?:\/|$)/.test(name),
+    },
+    {
+      message: name => `Invalid branch name "${name}": contains control characters`,
+      check: name => /[\x00-\x1f\x7f]/.test(name),
+    },
+  ];
+}
+
+const BRANCH_NAME_RULES = buildBranchNameRules();
+
+/**
+ * Find the first `INVALID_REF_PATTERNS` entry that matches `branchName`.
+ * Returns the human-readable error message (with the matched pattern),
+ * or `null` when no forbidden pattern is present.
+ *
+ * Exported for unit testing.
+ */
+export function findInvalidRefPattern(branchName: string): string | null {
+  for (const pattern of INVALID_REF_PATTERNS) {
+    if (typeof pattern === 'string') {
+      if (branchName.includes(pattern)) {
+        return `Invalid branch name "${branchName}": contains forbidden pattern "${pattern}"`;
+      }
+    } else if (pattern.test(branchName)) {
+      return `Invalid branch name "${branchName}": contains forbidden pattern ${pattern}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Validate that a branch name is a valid git ref.
  *
  * Applies the rules from `git-check-ref-format` so that user-provided
@@ -108,68 +182,15 @@ const INVALID_REF_PATTERNS: readonly (string | RegExp)[] = [
  * @internal Exported for testing purposes.
  */
 export function validateBranchName(branchName: string): void {
-  if (!branchName) {
-    throw new Error('Branch name cannot be empty');
-  }
-
-  // Cannot start or end with a dot
-  if (branchName.startsWith('.') || branchName.endsWith('.')) {
-    throw new Error(
-      `Invalid branch name "${branchName}": branch name cannot start or end with a dot (.)`
-    );
-  }
-
-  // Cannot start with a dash
-  if (branchName.startsWith('-')) {
-    throw new Error(
-      `Invalid branch name "${branchName}": branch name cannot start with a dash (-)`
-    );
-  }
-
-  // Cannot start or end with a slash
-  if (branchName.startsWith('/') || branchName.endsWith('/')) {
-    throw new Error(
-      `Invalid branch name "${branchName}": branch name cannot start or end with a slash (/)`
-    );
-  }
-
-  // Cannot end with .lock
-  if (branchName.endsWith('.lock')) {
-    throw new Error(`Invalid branch name "${branchName}": branch name cannot end with ".lock"`);
-  }
-
-  // Cannot contain consecutive slashes
-  if (branchName.includes('//')) {
-    throw new Error(
-      `Invalid branch name "${branchName}": branch name cannot contain consecutive slashes (//)`
-    );
-  }
-
-  // Cannot contain a component ending with a dot (e.g. "feature./fix")
-  if (/(?:^|\/)[^.]*\.(?:\/|$)/.test(branchName)) {
-    throw new Error(`Invalid branch name "${branchName}": component cannot end with a dot (.)`);
-  }
-
-  // Check for forbidden characters/patterns
-  for (const pattern of INVALID_REF_PATTERNS) {
-    if (typeof pattern === 'string') {
-      if (branchName.includes(pattern)) {
-        throw new Error(
-          `Invalid branch name "${branchName}": contains forbidden pattern "${pattern}"`
-        );
-      }
-    } else {
-      if (pattern.test(branchName)) {
-        throw new Error(
-          `Invalid branch name "${branchName}": contains forbidden pattern ${pattern}`
-        );
-      }
+  for (const rule of BRANCH_NAME_RULES) {
+    if (rule.check(branchName)) {
+      throw new Error(rule.message(branchName));
     }
   }
 
-  // Cannot contain control characters
-  if (/[\x00-\x1f\x7f]/.test(branchName)) {
-    throw new Error(`Invalid branch name "${branchName}": contains control characters`);
+  const forbidden = findInvalidRefPattern(branchName);
+  if (forbidden) {
+    throw new Error(forbidden);
   }
 }
 

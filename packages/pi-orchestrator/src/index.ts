@@ -5,14 +5,23 @@
  */
 
 // Core business logic
-export { ActionOrchestrator } from './orchestrator';
+export { ActionOrchestrator, buildSessionSuccessBody, buildSessionErrorBody } from './orchestrator';
 
 // Agent
 export { Agent } from './pi';
 export { createToolsFactory } from './pi/tools';
 export { createCancellationResult, withCancellation, buildParams } from './pi/tools/tool-execution';
 export type { CancellationResult, ToolExecutionConfig } from './pi/tools/tool-execution';
-export { formatThreadAsText } from './pi/tools/common';
+export {
+  formatThreadAsText,
+  formatThreadHeader,
+  formatThreadTimestamps,
+  formatThreadLabels,
+  formatPRFields,
+  formatThreadBody,
+  formatThreadComments,
+  formatReviewComments,
+} from './pi/tools/common';
 export { createLoggingFactory } from './pi/logging';
 export type { ExtensionLoadingInfo } from './pi/logging';
 export { truncateText } from './pi/logging';

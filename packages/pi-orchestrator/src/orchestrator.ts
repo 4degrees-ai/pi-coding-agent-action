@@ -27,6 +27,28 @@ import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion } from './version';
 
 /**
+ * Build the body of the success comment posted at the end of a run.
+ *
+ * The agent may produce no text response when it only used tools (e.g.
+ * created/updated a PR), so we fall back to a fixed completion message.
+ */
+export function buildSessionSuccessBody(result: string): string {
+  return result || '✅ Agent session completed';
+}
+
+/**
+ * Build the body of the failure comment posted when the Pi SDK resolves
+ * a run with a non-empty `error` field (provider quota, rate limit, etc).
+ * When the agent produced a partial result, append it before the error
+ * notice so the user sees both.
+ */
+export function buildSessionErrorBody(result: string, error: string): string {
+  return result
+    ? `${result}\n\n---\n\n❌ Agent session ended with error: ${error}`
+    : `❌ Agent session ended with error: ${error}`;
+}
+
+/**
  * Orchestrates the Pi agent execution flow.
  *
  * The orchestrator receives a pre-built configuration, retrieves the prompt,
@@ -59,80 +81,116 @@ export class ActionOrchestrator {
 
     try {
       prompt = await this.git.getPrompt(this.config.promptInput);
-
       if (!prompt) {
         throw new Error('No prompt found - cannot proceed');
       }
 
-      try {
-        reaction = await this.git.addReaction();
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        this.logger.notice(`failed to add reaction: ${errorMessage}`);
-      }
+      reaction = await this.addReactionBestEffort();
 
       const pi = this.piAgentFactory(this.config, this.logger, this.platformProvider);
       const { result, sessionStats, error } = await pi.run(prompt);
 
-      const exportPromises: Promise<void>[] = [];
-      if (this.config.exportSessionHtml) {
-        exportPromises.push(this.exportSessionOutput(pi, 'html'));
-      } else {
-        this.logger.debug('[session-html] export disabled by configuration');
-      }
-      if (this.config.exportSessionJsonl) {
-        exportPromises.push(this.exportSessionOutput(pi, 'jsonl'));
-      } else {
-        this.logger.debug('[session-jsonl] export disabled by configuration');
-      }
-      await Promise.all(exportPromises);
+      await this.runSessionExports(pi);
 
-      // Handle session-level errors (e.g., provider quota exceeded, rate
-      // limit). The Pi SDK resolves prompt() normally on these errors, so
-      // we detect them via the PromptResult.error field and report them
-      // as a failed run rather than posting a misleading success comment.
       if (error) {
-        this.logger.info('\n');
-        this.logger.info('════════════════════════════════════════════════════════════════');
-        this.logger.info(`❌ Agent session ended with error: ${error}`);
-        this.logger.info('════════════════════════════════════════════════════════════════');
-
-        const body = result
-          ? `${result}\n\n---\n\n❌ Agent session ended with error: ${error}`
-          : `❌ Agent session ended with error: ${error}`;
-        await this.finalize(body, this.config, startTime, reaction, sessionStats, false);
-        this.outputSink.setFailed(new Error(error));
+        await this.handleSessionError(error, result, startTime, reaction, sessionStats);
         return;
       }
 
-      this.logger.info('\n');
-      this.logger.info('════════════════════════════════════════════════════════════════');
-      this.logger.info('✅ Agent session completed');
-      this.logger.info('════════════════════════════════════════════════════════════════');
-
-      // Ensure we always post a final comment — when the agent only used tools
-      // (e.g. created/updated a PR) the text response may be empty.
-      const finalBody = result || '✅ Agent session completed';
+      this.logSessionBanner('✅ Agent session completed');
+      const finalBody = buildSessionSuccessBody(result);
       await this.finalize(finalBody, this.config, startTime, reaction, sessionStats, true);
     } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : String(e);
-
-      // Try to post error as comment. Wrap in its own try-catch so that
-      // a failure to finalize (e.g. network/API down after a timeout) does
-      // NOT prevent setFailed from running. The action must always signal
-      // failure to the CI runner, even when we cannot leave a comment.
-      try {
-        await this.finalize(errorMessage, this.config, startTime, reaction, undefined, false);
-      } catch (finalizeError) {
-        const finalizeErrorMessage =
-          finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
-        this.logger.notice(`failed to finalize after error: ${finalizeErrorMessage}`);
-      }
-
-      // Mark the action as failed and re-throw the original error
-      this.outputSink.setFailed(e instanceof Error ? e : new Error(String(e)));
+      await this.handleUncaughtError(e, startTime, reaction);
       throw e;
     }
+  }
+
+  /**
+   * Add a reaction to the triggering event, logging (not throwing) on failure.
+   * Reactions are best-effort: missing permissions on the token shouldn't
+   * abort the run.
+   */
+  private async addReactionBestEffort(): Promise<CreateReactionType | undefined> {
+    try {
+      return await this.git.addReaction();
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      this.logger.notice(`failed to add reaction: ${errorMessage}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Run the optional session-export calls (HTML and/or JSONL) in parallel,
+   * based on `config.exportSessionHtml` / `config.exportSessionJsonl`.
+   */
+  private async runSessionExports(pi: PiAgent): Promise<void> {
+    const exportPromises: Promise<void>[] = [];
+    if (this.config.exportSessionHtml) {
+      exportPromises.push(this.exportSessionOutput(pi, 'html'));
+    } else {
+      this.logger.debug('[session-html] export disabled by configuration');
+    }
+    if (this.config.exportSessionJsonl) {
+      exportPromises.push(this.exportSessionOutput(pi, 'jsonl'));
+    } else {
+      this.logger.debug('[session-jsonl] export disabled by configuration');
+    }
+    await Promise.all(exportPromises);
+  }
+
+  /**
+   * Handle a session-level error (e.g. provider quota, rate limit). Posts
+   * a failure comment, marks the action as failed, and returns. Does NOT
+   * re-throw — the caller (`execute`) returns normally after this.
+   */
+  private async handleSessionError(
+    error: string,
+    result: string,
+    startTime: Temporal.Instant,
+    reaction: CreateReactionType | undefined,
+    sessionStats: SessionStats | undefined
+  ): Promise<void> {
+    this.logSessionBanner(`❌ Agent session ended with error: ${error}`);
+    const body = buildSessionErrorBody(result, error);
+    await this.finalize(body, this.config, startTime, reaction, sessionStats, false);
+    this.outputSink.setFailed(new Error(error));
+  }
+
+  /**
+   * Handle an uncaught error: post the error message as a comment
+   * (best-effort), mark the action as failed. The caller still re-throws
+   * the original error after this returns.
+   */
+  private async handleUncaughtError(
+    e: unknown,
+    startTime: Temporal.Instant,
+    reaction: CreateReactionType | undefined
+  ): Promise<void> {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+
+    try {
+      await this.finalize(errorMessage, this.config, startTime, reaction, undefined, false);
+    } catch (finalizeError) {
+      const finalizeErrorMessage =
+        finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
+      this.logger.notice(`failed to finalize after error: ${finalizeErrorMessage}`);
+    }
+
+    this.outputSink.setFailed(e instanceof Error ? e : new Error(String(e)));
+  }
+
+  /**
+   * Log a banner-style message surrounded by visual separators + leading
+   * blank line. Used for both success and failure notifications.
+   */
+  private logSessionBanner(message: string): void {
+    const bar = '════'.repeat(16);
+    this.logger.info('');
+    this.logger.info(bar);
+    this.logger.info(message);
+    this.logger.info(bar);
   }
 
   /**

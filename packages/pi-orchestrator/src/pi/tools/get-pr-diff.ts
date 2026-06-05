@@ -1,5 +1,15 @@
 /**
  * @file get_pr_diff tool definition.
+ *
+ * Structure:
+ *   - Pure helpers (`mergeIgnoreFiles`, `truncateDiffByBytes`,
+ *     `truncateDiffByLines`, `truncateDiff`) — exported so they can be
+ *     unit-tested directly. None of them touch the platform provider or
+ *     any external state.
+ *   - `resolvePRParams` — bridges tool params + platform context into
+ *     the {owner, repo, pullNumber} triple. Already extracted (Step 2.3).
+ *   - `getPRDiffToolFactory` — the entry point. Wires the tool definition,
+ *     delegates the truncation math to the helpers above.
  */
 
 import { Type, Static } from 'typebox';
@@ -66,10 +76,127 @@ interface GetPRDiffDetails {
   cancelled?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Pure helpers (exported for unit testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Merge default + caller-provided ignore patterns into a single deduped
+ * list. Returns `undefined` when both inputs are empty (so callers can
+ * omit the field from their `details` payload).
+ */
+export function mergeIgnoreFiles(
+  defaultIgnore: string[],
+  callerIgnore: string[]
+): string[] | undefined {
+  const merged = [...new Set([...defaultIgnore, ...callerIgnore])];
+  return merged.length > 0 ? merged : undefined;
+}
+
+/** Marker appended to byte-truncated diffs. */
+const BYTE_TRUNCATION_MARKER = (maxBytes: number) => `\n... (truncated at ${maxBytes} bytes)`;
+
+/**
+ * Truncate a diff to fit within `maxBytes`, walking back to a UTF-8
+ * character boundary and then snapping to the last newline so we never
+ * cut mid-line. Returns `{ text, truncated }`; `truncated` is `false`
+ * when no truncation was needed.
+ */
+export function truncateDiffByBytes(
+  diff: string,
+  maxBytes: number
+): {
+  text: string;
+  truncated: boolean;
+} {
+  if (Buffer.byteLength(diff, 'utf8') <= maxBytes) {
+    return { text: diff, truncated: false };
+  }
+
+  const marker = BYTE_TRUNCATION_MARKER(maxBytes);
+  const markerBytes = Buffer.byteLength(marker, 'utf8');
+  const budget = maxBytes - markerBytes;
+  const buf = Buffer.from(diff, 'utf8');
+  let cutAt = Math.min(budget, buf.length);
+
+  // Walk back to a safe UTF-8 boundary (never split a continuation byte).
+  while (cutAt > 0 && ((buf[cutAt] ?? 0) & 0xc0) === 0x80) {
+    cutAt--;
+  }
+
+  let sliced = buf.subarray(0, cutAt).toString('utf8');
+  // Snap to the last newline so we don't cut mid-line.
+  const lastNewline = sliced.lastIndexOf('\n');
+  if (lastNewline > 0) {
+    sliced = sliced.slice(0, lastNewline);
+  }
+
+  return { text: sliced + marker, truncated: true };
+}
+
+/**
+ * Truncate a diff to at most `maxLines` lines, replacing the tail with
+ * a "... (truncated at N lines, M more)" marker. Returns
+ * `{ text, truncated }`; `truncated` is `false` when no truncation was
+ * needed.
+ */
+export function truncateDiffByLines(
+  diff: string,
+  maxLines: number
+): {
+  text: string;
+  truncated: boolean;
+} {
+  const lines = diff.split('\n');
+  if (lines.length <= maxLines) {
+    return { text: diff, truncated: false };
+  }
+  const remaining = lines.length - maxLines;
+  return {
+    text:
+      lines.slice(0, maxLines).join('\n') +
+      `\n... (truncated at ${maxLines} lines, ${remaining} more)`,
+    truncated: true,
+  };
+}
+
+/**
+ * Result of running the diff-truncation pipeline.
+ */
+export interface TruncateDiffResult {
+  text: string;
+  truncated: boolean;
+  truncatedReason?: 'bytes' | 'lines';
+}
+
+/**
+ * Run the diff-truncation pipeline.
+ *
+ * Strategy: byte-budget first (catches minified single-line blobs), then
+ * line-budget. Line truncation is skipped when byte truncation already
+ * fired because the byte limit is the tighter constraint and already
+ * snapped to a newline boundary.
+ */
+export function truncateDiff(diff: string, maxLines: number, maxBytes: number): TruncateDiffResult {
+  const byteResult = truncateDiffByBytes(diff, maxBytes);
+  if (byteResult.truncated) {
+    return { text: byteResult.text, truncated: true, truncatedReason: 'bytes' };
+  }
+  const lineResult = truncateDiffByLines(diff, maxLines);
+  if (lineResult.truncated) {
+    return { text: lineResult.text, truncated: true, truncatedReason: 'lines' };
+  }
+  return { text: diff, truncated: false };
+}
+
+// ---------------------------------------------------------------------------
+// Param resolution
+// ---------------------------------------------------------------------------
+
 /**
  * Resolve the owner, repo, and pull number from params or platform context.
  */
-function resolvePRParams(
+export function resolvePRParams(
   params: GetPRDiffToolParams,
   provider: PlatformProvider
 ): { owner: string; repo: string; pullNumber: number } | undefined {
@@ -86,11 +213,15 @@ function resolvePRParams(
   return { owner, repo, pullNumber };
 }
 
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
 /**
  * Create the get_pr_diff tool definition bound to a platform provider.
  *
  * @param provider - The platform provider for PR diff operations.
- * @param diffConfig - Optional diff configuration (max lines, max bytes, default ignore patterns).
+ * @param config - Optional diff configuration (max lines, max bytes, default ignore patterns).
  * @returns The tool definition.
  */
 export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffConfig) {
@@ -130,17 +261,12 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
 
         const { owner, repo, pullNumber } = resolved;
 
-        // Merge default ignore patterns with caller-provided ones
-        const defaultIgnore = config?.diffIgnorePatterns ?? [];
-        const callerIgnore = params.ignore_files ?? [];
-        const ignoreFiles = [...new Set([...defaultIgnore, ...callerIgnore])];
-
-        const diff = await provider.getPRDiff(
-          owner,
-          repo,
-          pullNumber,
-          ignoreFiles.length > 0 ? ignoreFiles : undefined
+        const ignoreFiles = mergeIgnoreFiles(
+          config?.diffIgnorePatterns ?? [],
+          params.ignore_files ?? []
         );
+
+        const diff = await provider.getPRDiff(owner, repo, pullNumber, ignoreFiles);
 
         if (!diff) {
           return {
@@ -160,56 +286,16 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
 
         const maxLines = params.max_lines ?? config?.diffMaxLines ?? 1000;
         const maxBytes = config?.diffMaxBytes ?? 102_400;
-        let finalDiff = diff;
-        let truncated = false;
-        let truncatedReason: 'bytes' | 'lines' | undefined;
+        const truncated = truncateDiff(diff, maxLines, maxBytes);
 
-        // Truncate by bytes first (catches minified single-line blobs)
-        if (Buffer.byteLength(finalDiff, 'utf8') > maxBytes) {
-          // Reserve space for the truncation marker to stay within maxBytes
-          const marker = `\n... (truncated at ${maxBytes} bytes)`;
-          const markerBytes = Buffer.byteLength(marker, 'utf8');
-          const budget = maxBytes - markerBytes;
-          // Slice at a byte boundary that won't split a multi-byte character
-          const buf = Buffer.from(finalDiff, 'utf8');
-          let cutAt = Math.min(budget, buf.length);
-          // Walk back to a safe UTF-8 boundary (never split a continuation byte)
-          while (cutAt > 0 && ((buf[cutAt] ?? 0) & 0xc0) === 0x80) {
-            cutAt--;
-          }
-          let sliced = buf.subarray(0, cutAt).toString('utf8');
-          // Snap to the last newline so we don't cut mid-line
-          const lastNewline = sliced.lastIndexOf('\n');
-          if (lastNewline > 0) {
-            sliced = sliced.slice(0, lastNewline);
-          }
-          finalDiff = sliced + marker;
-          truncated = true;
-          truncatedReason = 'bytes';
-        }
-
-        // Then truncate by lines (skip if byte truncation already occurred,
-        // since the byte limit is the tighter constraint and already snapped
-        // to a newline boundary)
-        if (!truncatedReason) {
-          const currentLines = finalDiff.split('\n').length;
-          if (currentLines > maxLines) {
-            finalDiff =
-              finalDiff.split('\n').slice(0, maxLines).join('\n') +
-              `\n... (truncated at ${maxLines} lines, ${currentLines - maxLines} more)`;
-            truncated = true;
-            truncatedReason = 'lines';
-          }
-        }
-
-        const finalLineCount = finalDiff.split('\n').length;
+        const finalLineCount = truncated.text.split('\n').length;
         const details: GetPRDiffDetails = {
           pull_number: pullNumber,
           lines: finalLineCount,
-          truncated,
-          ...(truncatedReason ? { truncated_reason: truncatedReason } : {}),
+          truncated: truncated.truncated,
+          ...(truncated.truncatedReason ? { truncated_reason: truncated.truncatedReason } : {}),
         };
-        if (ignoreFiles.length > 0) {
+        if (ignoreFiles) {
           details.ignored_files = ignoreFiles;
         }
 
@@ -217,7 +303,7 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
           content: [
             {
               type: 'text' as const,
-              text: `PR #${pullNumber} Diff:\n\`\`\`diff\n${finalDiff}\n\`\`\``,
+              text: `PR #${pullNumber} Diff:\n\`\`\`diff\n${truncated.text}\n\`\`\``,
             },
           ],
           details: details satisfies GetPRDiffDetails,

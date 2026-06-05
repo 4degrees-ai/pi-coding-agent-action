@@ -164,6 +164,28 @@ async function fetchThreadComments(
  * @param maxReviewComments - Maximum number of review comments to return.
  * @returns Array of review comments, or empty array on error.
  */
+/**
+ * Map a raw GitHub API review-comment payload to the platform-agnostic
+ * {@link ReviewComment} shape used by `getIssueOrPRThread`.
+ *
+ * Exported for unit testing.
+ */
+export function mapReviewComment(
+  comment: RestEndpointMethodTypes['pulls']['listReviewComments']['response']['data'][number]
+): ReviewComment {
+  return {
+    id: comment.id,
+    path: comment.path,
+    line: comment.line ?? comment.original_line ?? null,
+    side: (comment.side as 'LEFT' | 'RIGHT') ?? 'RIGHT',
+    author: comment.user?.login ?? 'unknown',
+    author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
+    created_at: comment.created_at,
+    body: comment.body,
+    ...(comment.in_reply_to_id ? { in_reply_to_id: comment.in_reply_to_id } : {}),
+  };
+}
+
 async function fetchPRReviewComments(
   deps: GitHubModuleDeps,
   owner: string,
@@ -193,17 +215,7 @@ async function fetchPRReviewComments(
         if (reviewComments.length >= maxReviewComments) {
           break;
         }
-        reviewComments.push({
-          id: comment.id,
-          path: comment.path,
-          line: comment.line ?? comment.original_line ?? null,
-          side: (comment.side as 'LEFT' | 'RIGHT') ?? 'RIGHT',
-          author: comment.user?.login ?? 'unknown',
-          author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
-          created_at: comment.created_at,
-          body: comment.body,
-          ...(comment.in_reply_to_id ? { in_reply_to_id: comment.in_reply_to_id } : {}),
-        });
+        reviewComments.push(mapReviewComment(comment));
       }
 
       if (response.data.length < perPage) {

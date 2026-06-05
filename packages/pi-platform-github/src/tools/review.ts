@@ -16,6 +16,39 @@ import type {
 
 export type { CreateReviewParams, CreateReviewDetails, ReviewInlineComment };
 
+/** Allowed values for the review `event` field. */
+const VALID_REVIEW_EVENTS = new Set(['COMMENT', 'APPROVE', 'REQUEST_CHANGES']);
+
+/** Validate a single inline comment's fields. Throws with index-prefixed message. */
+export function validateReviewComment(comment: ReviewInlineComment, index: number): void {
+  if (!comment.path || comment.path.trim() === '') {
+    throw new Error(`Comment at index ${index}: "path" is required and cannot be empty`);
+  }
+  if (!comment.body || comment.body.trim() === '') {
+    throw new Error(`Comment at index ${index}: "body" is required and cannot be empty`);
+  }
+  if (typeof comment.line !== 'number' || !Number.isInteger(comment.line) || comment.line < 1) {
+    throw new Error(`Comment at index ${index}: "line" must be a positive integer`);
+  }
+  if (comment.start_line !== undefined) {
+    if (!Number.isInteger(comment.start_line) || comment.start_line < 1) {
+      throw new Error(`Comment at index ${index}: "start_line" must be a positive integer`);
+    }
+    if (comment.start_line > comment.line) {
+      throw new Error(
+        `Comment at index ${index}: "start_line" (${comment.start_line}) must be <= "line" (${comment.line})`
+      );
+    }
+  }
+}
+
+/** Validate the review-level `event` field. Throws on invalid value. */
+export function validateReviewEvent(event: string | undefined): void {
+  if (event && !VALID_REVIEW_EVENTS.has(event)) {
+    throw new Error(`Invalid event "${event}". Must be one of: COMMENT, APPROVE, REQUEST_CHANGES`);
+  }
+}
+
 /**
  * Validate review parameters before making API calls.
  *
@@ -27,34 +60,8 @@ export function validateCreateReviewParams(params: CreateReviewParams): void {
   if (!params.comments || params.comments.length === 0) {
     throw new Error('At least one inline comment is required to create a review');
   }
-
-  for (const [i, c] of params.comments.entries()) {
-    if (!c.path || c.path.trim() === '') {
-      throw new Error(`Comment at index ${i}: "path" is required and cannot be empty`);
-    }
-    if (!c.body || c.body.trim() === '') {
-      throw new Error(`Comment at index ${i}: "body" is required and cannot be empty`);
-    }
-    if (typeof c.line !== 'number' || !Number.isInteger(c.line) || c.line < 1) {
-      throw new Error(`Comment at index ${i}: "line" must be a positive integer`);
-    }
-    if (c.start_line !== undefined) {
-      if (!Number.isInteger(c.start_line) || c.start_line < 1) {
-        throw new Error(`Comment at index ${i}: "start_line" must be a positive integer`);
-      }
-      if (c.start_line > c.line) {
-        throw new Error(
-          `Comment at index ${i}: "start_line" (${c.start_line}) must be <= "line" (${c.line})`
-        );
-      }
-    }
-  }
-
-  if (params.event && !['COMMENT', 'APPROVE', 'REQUEST_CHANGES'].includes(params.event)) {
-    throw new Error(
-      `Invalid event "${params.event}". Must be one of: COMMENT, APPROVE, REQUEST_CHANGES`
-    );
-  }
+  params.comments.forEach((comment, i) => validateReviewComment(comment, i));
+  validateReviewEvent(params.event);
 }
 
 /**

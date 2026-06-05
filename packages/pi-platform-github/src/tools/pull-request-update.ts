@@ -201,17 +201,7 @@ export function buildDryRunReport(input: {
   }
   parts.push(`- Head branch: ${headBranch}`);
   parts.push(`- Base branch: ${baseBranch}`);
-  if (changedFiles.length > 0 || deletedFiles.length > 0) {
-    parts.push(`- Code changes:`);
-    if (changedFiles.length > 0) {
-      parts.push(`  - ${changedFiles.length} modified/new file(s)`);
-    }
-    if (deletedFiles.length > 0) {
-      parts.push(`  - ${deletedFiles.length} deleted file(s)`);
-    }
-  } else {
-    parts.push(`- No code changes detected`);
-  }
+  parts.push(...formatChangeSummary(changedFiles, deletedFiles));
 
   return {
     content: [{ type: 'text' as const, text: parts.join('\n') }],
@@ -223,6 +213,34 @@ export function buildDryRunReport(input: {
       dryRun: true,
     },
   };
+}
+
+/**
+ * Build the "Code changes" section of a dry-run report.
+ *
+ * Returns one of:
+ *   - `["- Code changes:", "  - N modified/new file(s)", "  - M deleted file(s)"]`
+ *     (one or both counts depending on input)
+ *   - `["- No code changes detected"]` when both lists are empty.
+ *
+ * Exported for unit testing.
+ */
+export function formatChangeSummary(
+  changedFiles: readonly { path: string }[],
+  deletedFiles: readonly string[]
+): string[] {
+  if (changedFiles.length === 0 && deletedFiles.length === 0) {
+    return ['- No code changes detected'];
+  }
+
+  const lines: string[] = ['- Code changes:'];
+  if (changedFiles.length > 0) {
+    lines.push(`  - ${changedFiles.length} modified/new file(s)`);
+  }
+  if (deletedFiles.length > 0) {
+    lines.push(`  - ${deletedFiles.length} deleted file(s)`);
+  }
+  return lines;
 }
 
 /**
@@ -275,7 +293,7 @@ export function buildSuccessReport(input: {
   titleUpdated: boolean | undefined;
   bodyUpdated: boolean | undefined;
 }): UpdatePullRequestResult {
-  const { pullNumber, prUrl, headBranch, baseBranch, commitSha, titleUpdated, bodyUpdated } = input;
+  const { pullNumber, prUrl, commitSha, titleUpdated, bodyUpdated } = input;
 
   const parts: string[] = [`Pull request #${pullNumber} updated: ${prUrl}`];
   if (commitSha) {
@@ -287,8 +305,31 @@ export function buildSuccessReport(input: {
   if (bodyUpdated) {
     parts.push(`- Description updated`);
   }
-  const successMessage = parts.join('\n');
 
+  return {
+    content: [{ type: 'text' as const, text: parts.join('\n') }],
+    details: buildSuccessDetails(input),
+  };
+}
+
+/**
+ * Build the `details` payload for a successful PR update.
+ *
+ * Only includes optional fields (`commitSha`, `titleUpdated`, `bodyUpdated`)
+ * when they are set / truthy, matching the historical contract.
+ *
+ * Exported for unit testing.
+ */
+export function buildSuccessDetails(input: {
+  pullNumber: number;
+  prUrl: string;
+  headBranch: string;
+  baseBranch: string;
+  commitSha: string | undefined;
+  titleUpdated: boolean | undefined;
+  bodyUpdated: boolean | undefined;
+}): UpdatePullRequestDetails {
+  const { pullNumber, prUrl, headBranch, baseBranch, commitSha, titleUpdated, bodyUpdated } = input;
   const details: UpdatePullRequestDetails = {
     pullRequestNumber: pullNumber,
     pullRequestUrl: prUrl,
@@ -305,11 +346,7 @@ export function buildSuccessReport(input: {
   if (bodyUpdated) {
     details.bodyUpdated = bodyUpdated;
   }
-
-  return {
-    content: [{ type: 'text' as const, text: successMessage }],
-    details,
-  };
+  return details;
 }
 
 /**
@@ -362,6 +399,74 @@ export async function applyCommit(
 }
 
 /**
+ * Log the initial debug lines for a PR-update invocation.
+ *
+ * Exported for unit testing.
+ */
+export function logUpdateDebugStart(
+  log: { debug: (msg: string) => void },
+  params: UpdatePullRequestParams,
+  pullNumber: number
+): void {
+  const { title, body, dryRun } = params;
+  log.debug(`PR Number: ${pullNumber}`);
+  log.debug(`Title: ${title ?? '(no change)'}`);
+  log.debug(`Body: ${body ? '(provided)' : '(no change)'}`);
+  log.debug(`DryRun: ${dryRun ?? false}`);
+}
+
+/**
+ * Log the PR-info debug lines after fetching PR data.
+ *
+ * Exported for unit testing.
+ */
+export function logPRFoundDebug(
+  log: { debug: (msg: string) => void },
+  info: { prUrl: string; headBranch: string; baseBranch: string; headSha: string }
+): void {
+  log.debug(`PR found: ${info.prUrl}`);
+  log.debug(`Head branch: ${info.headBranch}`);
+  log.debug(`Base branch: ${info.baseBranch}`);
+  log.debug(`Head SHA: ${info.headSha}`);
+}
+
+/**
+ * Update PR title/body metadata when at least one is provided; log what was
+ * updated. Returns `{ titleUpdated: false, bodyUpdated: false }` when neither
+ * is supplied.
+ *
+ * Exported for unit testing.
+ */
+export async function applyMetadataUpdate(
+  deps: GitHubModuleDeps,
+  pullNumber: number,
+  title: string | undefined,
+  body: string | undefined,
+  log: { info: (msg: string) => void }
+): Promise<{ titleUpdated: boolean; bodyUpdated: boolean }> {
+  if (title === undefined && body === undefined) {
+    return { titleUpdated: false, bodyUpdated: false };
+  }
+
+  const updateParams: { title?: string; body?: string } = {};
+  if (title !== undefined) {
+    updateParams.title = title;
+  }
+  if (body !== undefined) {
+    updateParams.body = body;
+  }
+
+  const metadataResult = await updatePullRequestMetadata(deps, pullNumber, updateParams);
+  if (metadataResult.titleUpdated) {
+    log.info(`Updated PR title to: ${title}`);
+  }
+  if (metadataResult.bodyUpdated) {
+    log.info(`Updated PR description`);
+  }
+  return metadataResult;
+}
+
+/**
  * Update a pull request end-to-end.
  *
  * Orchestrates the full flow: fetches the PR and its branch, scans for changed
@@ -389,20 +494,14 @@ export async function updatePullRequest(
   // Resolve PR number from context if not provided
   const resolvedPullNumber = resolvePullRequestNumber(deps, params.pull_number);
 
-  log.debug(`PR Number: ${resolvedPullNumber}`);
-  log.debug(`Title: ${title ?? '(no change)'}`);
-  log.debug(`Body: ${body ? '(provided)' : '(no change)'}`);
-  log.debug(`DryRun: ${dryRun ?? false}`);
+  logUpdateDebugStart(log, params, resolvedPullNumber);
 
   const { headBranch, baseBranch, headSha, prUrl } = await fetchPullRequestData(
     deps,
     resolvedPullNumber
   );
 
-  log.debug(`PR found: ${prUrl}`);
-  log.debug(`Head branch: ${headBranch}`);
-  log.debug(`Base branch: ${baseBranch}`);
-  log.debug(`Head SHA: ${headSha}`);
+  logPRFoundDebug(log, { prUrl, headBranch, baseBranch, headSha });
 
   // Get files that exist in the current PR head tree (for comparison)
   log.debug(`Getting PR head tree...`);
@@ -438,28 +537,13 @@ export async function updatePullRequest(
     log,
   });
 
-  // Update PR title/body if provided
-  let titleUpdated = false;
-  let bodyUpdated = false;
-  if (title !== undefined || body !== undefined) {
-    const updateParams: { title?: string; body?: string } = {};
-    if (title !== undefined) {
-      updateParams.title = title;
-    }
-    if (body !== undefined) {
-      updateParams.body = body;
-    }
-    const metadataResult = await updatePullRequestMetadata(deps, resolvedPullNumber, updateParams);
-    titleUpdated = metadataResult.titleUpdated;
-    bodyUpdated = metadataResult.bodyUpdated;
-
-    if (titleUpdated) {
-      log.info(`Updated PR title to: ${title}`);
-    }
-    if (bodyUpdated) {
-      log.info(`Updated PR description`);
-    }
-  }
+  const { titleUpdated, bodyUpdated } = await applyMetadataUpdate(
+    deps,
+    resolvedPullNumber,
+    title,
+    body,
+    log
+  );
 
   const result = buildSuccessReport({
     pullNumber: resolvedPullNumber,

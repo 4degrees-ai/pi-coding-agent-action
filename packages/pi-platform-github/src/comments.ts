@@ -5,6 +5,15 @@
  * and replies to PR review comments. Supports appending an action-run link to the
  * final comment posted by the Pi agent.
  *
+ * Structure:
+ *   - Pure helpers (`buildActionRunUrl`, `formatModelMetadata`,
+ *     `formatSessionStatsLine`, `buildMetadataFooter`) — exported for direct
+ *     unit testing.
+ *   - `createComment` — internal helper; dispatches to the right Octokit
+ *     endpoint (issue comment vs PR review-thread reply).
+ *   - `createFinalComment` — the entry point. Composes the metadata footer
+ *     then delegates the actual API call to `createComment`.
+ *
  * All functions accept a {@link GitHubModuleDeps} parameter for explicit
  * dependency injection — no module-level singletons or `@actions/*` imports.
  */
@@ -27,13 +36,110 @@ export type CreateCommentType =
   | RestEndpointMethodTypes['issues']['createComment']['response']
   | RestEndpointMethodTypes['pulls']['createReplyForReviewComment']['response'];
 
+// ---------------------------------------------------------------------------
+// Pure helpers (exported for unit testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the GitHub Actions run URL from a deps context, or return
+ * `undefined` when any required field is missing.
+ */
+export function buildActionRunUrl(deps: GitHubModuleDeps): string | undefined {
+  const serverUrl = deps.context.serverUrl || 'https://github.com';
+  const { owner, repo } = deps.context.repo;
+  const runId = deps.context.runId;
+  if (!owner || !repo || !runId) {
+    return undefined;
+  }
+  return `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
+}
+
+/**
+ * Format the `Model: provider/model (thinking: <level>)` line, or return
+ * `undefined` when provider or model is missing. Thinking-level is
+ * omitted when it's `'off'` or absent.
+ */
+export function formatModelMetadata(metadata: CommentMetadata): string | undefined {
+  if (!metadata.provider || !metadata.model) {
+    return undefined;
+  }
+  let line = `Model: ${metadata.provider}/${metadata.model}`;
+  if (metadata.thinkingLevel && metadata.thinkingLevel !== 'off') {
+    line = `${line} (thinking: ${metadata.thinkingLevel})`;
+  }
+  return line;
+}
+
+/**
+ * Format the "Tokens: N · Cost: $X.XX" line, plus the "Pi SDK v…" line
+ * when a version is present. Returns an empty array when there are no
+ * session stats at all.
+ *
+ * Cost is rendered via `Math.abs()` to accommodate pay-as-you-go providers
+ * (e.g. ppq.ai) that report spending as a negative number against an
+ * account balance.
+ */
+export function formatSessionStatsLines(metadata: CommentMetadata): string[] {
+  const stats = metadata.sessionStats;
+  if (!stats) {
+    return [];
+  }
+  const lines: string[] = [];
+  lines.push(`Tokens: ${formatNumber(stats.totalTokens)}`);
+  const cost = Math.abs(stats.cost);
+  if (cost > 0) {
+    lines.push(`Cost: $${cost.toFixed(2)}`);
+  }
+  if (stats.version) {
+    lines.push(`Pi SDK v${stats.version}`);
+  }
+  return lines;
+}
+
+/**
+ * Build the metadata footer (everything after the `---` separator) for a
+ * final comment. Returns `undefined` when no action-run URL is available
+ * (in which case the caller should post the bare body without a footer).
+ *
+ * Order of parts: action run link · model · time · tokens · cost · SDK
+ * version · action version.
+ */
+export function buildMetadataFooter(
+  deps: GitHubModuleDeps,
+  metadata: CommentMetadata | undefined
+): string | undefined {
+  const actionRunUrl = buildActionRunUrl(deps);
+  if (!actionRunUrl) {
+    return undefined;
+  }
+
+  const parts: string[] = [`[View action run](${actionRunUrl})`];
+
+  if (metadata) {
+    const modelLine = formatModelMetadata(metadata);
+    if (modelLine) {
+      parts.push(modelLine);
+    }
+    if (metadata.executionDuration !== undefined) {
+      parts.push(`Time: ${formatExecutionTime(metadata.executionDuration)}`);
+    }
+    parts.push(...formatSessionStatsLines(metadata));
+    if (metadata.actionVersion) {
+      parts.push(`Action v${metadata.actionVersion}`);
+    }
+  }
+
+  return parts.join(' | ');
+}
+
+// ---------------------------------------------------------------------------
+// Comment dispatch (issue vs PR review-thread reply)
+// ---------------------------------------------------------------------------
+
 /**
  * Check if the current comment is a pull request review comment (inline comment).
  *
  * PR review comments have a `pull_request_review_id` field in the payload.
- *
- * @param deps - Module dependencies.
- * @returns `true` if the comment is a PR review comment, `false` otherwise.
  */
 function isPullRequestReviewComment(deps: GitHubModuleDeps): boolean {
   const comment = deps.context.payload.comment as { pull_request_review_id?: number } | undefined;
@@ -48,7 +154,8 @@ function isPullRequestReviewComment(deps: GitHubModuleDeps): boolean {
  *
  * @param deps - Module dependencies.
  * @param body - The Markdown body of the comment.
- * @returns The Octokit response, or `undefined` if `body` is empty.
+ * @returns The Octokit response, or `undefined` if `body` is empty or no
+ *   issue/PR number is in context.
  */
 async function createComment(
   deps: GitHubModuleDeps,
@@ -67,7 +174,6 @@ async function createComment(
   const octokit = deps.octokit;
   const { owner, repo } = deps.context.repo;
 
-  // Check if this is a reply to a PR review comment (inline comment)
   if (isPullRequestReviewComment(deps)) {
     const comment = deps.context.payload.comment as { id?: number } | undefined;
     if (comment?.id === undefined) {
@@ -93,6 +199,10 @@ async function createComment(
     });
   }
 }
+
+// ---------------------------------------------------------------------------
+// Number / time formatting (kept exported; pre-existing API)
+// ---------------------------------------------------------------------------
 
 /**
  * Format a Temporal Duration to a human-readable string, rounded to the nearest second.
@@ -143,6 +253,10 @@ export function formatNumber(value: number): string {
   return String(value);
 }
 
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
 /**
  * Post the final result (or error) comment on the current issue or pull request.
  *
@@ -163,54 +277,8 @@ export async function createFinalComment(
     return;
   }
 
-  // Build the action run URL
-  const serverUrl = deps.context.serverUrl || 'https://github.com';
-  const { owner, repo } = deps.context.repo;
-  const runId = deps.context.runId;
-
-  let finalBody = body;
-  if (owner && repo && runId) {
-    const actionRunUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
-
-    // Build metadata parts
-    const metadataParts: string[] = [`[View action run](${actionRunUrl})`];
-
-    if (metadata?.provider && metadata.model) {
-      let modStr = `Model: ${metadata.provider}/${metadata.model}`;
-      if (metadata?.thinkingLevel && metadata.thinkingLevel !== 'off') {
-        modStr = `${modStr} (thinking: ${metadata.thinkingLevel})`;
-      }
-      metadataParts.push(modStr);
-    }
-
-    if (metadata?.executionDuration !== undefined) {
-      metadataParts.push(`Time: ${formatExecutionTime(metadata.executionDuration)}`);
-    }
-
-    // Add token usage if available
-    if (metadata?.sessionStats) {
-      const { totalTokens, cost } = metadata.sessionStats;
-      metadataParts.push(`Tokens: ${formatNumber(totalTokens)}`);
-
-      // some pay-as-you-go providers (e.g. ppq.ai) may represent spending cost as
-      // negative (to maybe avoid confusing the user for the account-balance left?)
-      const sessionCost = Math.abs(cost);
-
-      if (sessionCost > 0) {
-        metadataParts.push(`Cost: $${sessionCost.toFixed(2)}`);
-      }
-    }
-
-    if (metadata?.sessionStats?.version) {
-      metadataParts.push(`Pi SDK v${metadata.sessionStats.version}`);
-    }
-
-    if (metadata?.actionVersion) {
-      metadataParts.push(`Action v${metadata.actionVersion}`);
-    }
-
-    finalBody = `${body}\n\n---\n\n${metadataParts.join(' | ')}`;
-  }
+  const footer = buildMetadataFooter(deps, metadata);
+  const finalBody = footer ? `${body}\n\n---\n\n${footer}` : body;
 
   return createComment(deps, finalBody);
 }

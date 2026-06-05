@@ -156,6 +156,54 @@ async function fetchWorkflowRuns(
 }
 
 /**
+ * Build the human-readable CI-status summary for a ref + its check runs +
+ * workflow runs. Returns the lines that will be joined with `\n` to form
+ * the text content of the tool response.
+ *
+ * Exported for unit testing.
+ */
+export function buildCIStatusSummary(
+  shortRef: string,
+  checkRuns: readonly CheckRunResult[],
+  workflowRuns: readonly WorkflowRunResult[]
+): string[] {
+  const lines: string[] = [`CI Status for ${shortRef}:`, ''];
+
+  if (checkRuns.length > 0) {
+    lines.push(`Check Runs (${checkRuns.length}):`);
+    for (const cr of checkRuns) {
+      const icon = getStatusIcon(cr.status, cr.conclusion);
+      lines.push(
+        `  ${icon} ${cr.name}: ${cr.status}` + `${cr.conclusion ? ` (${cr.conclusion})` : ''}`
+      );
+      if (cr.details_url) {
+        lines.push(`     ${cr.details_url}`);
+      }
+    }
+    lines.push('');
+  }
+
+  if (workflowRuns.length > 0) {
+    lines.push(`Workflow Runs (${workflowRuns.length}):`);
+    for (const wr of workflowRuns) {
+      const icon = getStatusIcon(wr.status, wr.conclusion);
+      lines.push(
+        `  ${icon} ${wr.name} [${wr.event}]: ${wr.status}` +
+          `${wr.conclusion ? ` (${wr.conclusion})` : ''}`
+      );
+      lines.push(`     Run ID: ${wr.id} · ${wr.html_url}`);
+    }
+    lines.push('');
+  }
+
+  if (checkRuns.length === 0 && workflowRuns.length === 0) {
+    lines.push('No check runs or workflow runs found for this ref.');
+  }
+
+  return lines;
+}
+
+/**
  * Get CI status for a ref or pull request.
  *
  * Fetches both check runs and workflow runs for the resolved ref (SHA).
@@ -202,38 +250,7 @@ export async function getCIStatus(
 
   // Build human-readable summary
   const shortRef = ref.length > 8 ? ref.substring(0, 8) : ref;
-  const lines: string[] = [`CI Status for ${shortRef}:`, ''];
-
-  if (checkRuns.length > 0) {
-    lines.push(`Check Runs (${checkRuns.length}):`);
-    for (const cr of checkRuns) {
-      const icon = getStatusIcon(cr.status, cr.conclusion);
-      lines.push(
-        `  ${icon} ${cr.name}: ${cr.status}` + `${cr.conclusion ? ` (${cr.conclusion})` : ''}`
-      );
-      if (cr.details_url) {
-        lines.push(`     ${cr.details_url}`);
-      }
-    }
-    lines.push('');
-  }
-
-  if (workflowRuns.length > 0) {
-    lines.push(`Workflow Runs (${workflowRuns.length}):`);
-    for (const wr of workflowRuns) {
-      const icon = getStatusIcon(wr.status, wr.conclusion);
-      lines.push(
-        `  ${icon} ${wr.name} [${wr.event}]: ${wr.status}` +
-          `${wr.conclusion ? ` (${wr.conclusion})` : ''}`
-      );
-      lines.push(`     Run ID: ${wr.id} · ${wr.html_url}`);
-    }
-    lines.push('');
-  }
-
-  if (checkRuns.length === 0 && workflowRuns.length === 0) {
-    lines.push('No check runs or workflow runs found for this ref.');
-  }
+  const lines = buildCIStatusSummary(shortRef, checkRuns, workflowRuns);
 
   return {
     content: [{ type: 'text' as const, text: lines.join('\n') }],
