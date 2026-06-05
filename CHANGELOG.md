@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.2] - 2026-06-05
+
+### Changed
+
+- fallow driven cleanups (#267)
+- **README.md**: improve 'if' clause to detect /pi (#260)
+- remove GITHUB_SERVER_URL requirement
+- setup monorepo (#259)
+- update AGENTS.md for monorepo/orchestrator layout (#264)
+- **deps-dev**: update dependencies (#261)
+- **deps**: update dependencies (#268)
+
+### Fixed
+
+- **orchestrator**: report provider errors when agent session ends early (#265)
+- use correct currency format for comment footer
+
 ## [2.19.1] - 2026-06-03
 
 ### Changed
@@ -423,7 +440,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.1...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.2...HEAD
+[2.19.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.1...v2.19.2
 [2.19.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.0...v2.19.1
 [2.19.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.18.0...v2.19.0
 [2.18.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.17.1...v2.18.0

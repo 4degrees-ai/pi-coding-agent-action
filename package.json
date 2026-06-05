@@ -1,9 +1,11 @@
 {
   "name": "pi-coding-agent-action",
-  "version": "2.19.1",
+  "version": "2.19.2",
   "private": true,
   "description": "CI/CD Action to integrate Pi coding agent in workflows",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "package": "bun packages/pi-action/scripts/package.ts",
     "prepare": "bun run package",
