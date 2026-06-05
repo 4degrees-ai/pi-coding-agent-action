@@ -1,6 +1,16 @@
 # Pi Coding Agent Action
 
-[![Codecov](https://codecov.io/gh/shaftoe/pi-coding-agent-action/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/shaftoe/pi-coding-agent-action/)
+<p align="center">
+  <a href="https://github.com/shaftoe/pi-coding-agent-action/releases"><img alt="GitHub release" src="https://img.shields.io/github/v/release/shaftoe/pi-coding-agent-action?logo=github"></a>
+  <a href="https://github.com/marketplace/actions/pi-github-action"><img alt="Marketplace" src="https://img.shields.io/badge/Marketplace-2C8EBB?logo=githubactions&logoColor=white"></a>
+  <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white"></a>
+  <a href="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/build.yml"><img alt="Build" src="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/build.yml/badge.svg?branch=develop"></a>
+  <a href="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/release.yml"><img alt="Release" src="https://github.com/shaftoe/pi-coding-agent-action/actions/workflows/release.yml/badge.svg?branch=v2"></a>
+  <a href="https://github.com/shaftoe/pi-coding-agent-action/pulls"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen"></a>
+  <a href="https://github.com/semantic-release/semantic-release"><img alt="semantic-release" src="https://img.shields.io/badge/semantic--release-e10079?logo=semantic-release"></a>
+  <a href="https://codecov.io/gh/shaftoe/pi-coding-agent-action/"><img alt="Codecov" src="https://codecov.io/gh/shaftoe/pi-coding-agent-action/branch/develop/graph/badge.svg"></a>
+  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/github/license/shaftoe/pi-coding-agent-action"></a>
+</p>
 
 A CI/CD action that integrates [Pi coding agent](https://pi.dev) with git hosting platform workflows. Works with **GitHub**, **Codeberg**, and self-hosted **Forgejo** instances — any platform that provides GitHub-compatible APIs and CI/CD environment variables.
 
@@ -26,13 +36,13 @@ If all you want is running Pi inside a CI/CD environment technically you don't n
 
 might be just good enough and probably will always be the best fit for a pure "as minimalist as Pi" approach.
 
-On the other hand that's true for almost everything which is offered by the Actions ecosystem, useful and popular Actions are mostly focused on providing a pleasant UX around the raw core functionality they provide.
+On the other hand that's true for almost everything which is offered by the Actions ecosystem, useful and popular Actions are mostly focused on providing **a pleasant UX around the raw core functionality** they provide.
 
-This project goal is exactly that: to provide a short list of (opt-out) opinionated default features for interacting with and executing Pi agent sessions inside CI/CD environments compatible with GitHub API.
+This project goal is exactly that: to provide a short list of (opt-out) **opinionated default features** for interacting with and executing Pi agent sessions inside CI/CD environments compatible with GitHub API.
 
-For all the rest you're free and encouraged to just configure the action environment as you would your local Pi instance, e.g. adding files to `~/.pi/agent/`, environment variables, etc., and more generally to compose workflow pipelines around this action's inputs and outputs to fullfill your specific needs.
+For all the rest you're free and encouraged to just configure the action environment as you would your *local* Pi instance, e.g. adding files to `~/.pi/agent/`, environment variables, etc., and more generally to compose workflow pipelines around this action's inputs and outputs to fullfill your specific needs.
 
-Refer to [the official Pi documentation](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent#customization) to learn how to tweak Pi to best fit your needs.
+Refer to [the official Pi documentation](https://pi.dev./docs/latest) to learn how to tweak Pi to best fit your needs.
 
 ## Disclaimer
 
