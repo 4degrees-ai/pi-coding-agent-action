@@ -21,8 +21,6 @@ concurrency:
 jobs:
   rebuild-dist:
     uses: ./.github/workflows/rebuild-dist.yml
-    with:
-      commit-message: 'chore: update dist and README deps [skip ci]'
     secrets: inherit
 
   update-readme:
