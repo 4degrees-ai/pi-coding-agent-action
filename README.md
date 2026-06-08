@@ -58,7 +58,7 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 > [!IMPORTANT]
 > The `develop` and `v2` branches are in constant development so if you don't want the bleeding edge you should pin to the latest release, e.g.
 > ```yaml
->    uses: shaftoe/pi-coding-agent-action@v2.19.3
+>    uses: shaftoe/pi-coding-agent-action@v2.19.4
 > ```
 
 > [!CAUTION]
