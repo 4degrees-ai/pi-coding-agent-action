@@ -42,6 +42,28 @@ import type {
 } from './tools/get-workflow-run-logs';
 
 /**
+ * Substring patterns that identify a recognized git host. Matches the
+ * branches of {@link detectPlatform}.
+ *
+ * Exported so frontends (e.g. `pi-cli`) can warn when a user points at a
+ * host that doesn't match any known pattern — `detectPlatform` silently
+ * falls back to `'github'` for unrecognized hosts, so callers that want
+ * to surface the fallback must check this predicate themselves.
+ */
+const KNOWN_HOST_PATTERNS = ['codeberg', 'forgejo', 'gitea', 'github.com', '.github.'] as const;
+
+/**
+ * Return `true` iff `serverUrl` matches a host pattern recognized by
+ * {@link detectPlatform}. Pure — no environment access.
+ */
+export function isKnownServerUrl(serverUrl: string): boolean {
+  if (!serverUrl) {
+    return false;
+  }
+  return KNOWN_HOST_PATTERNS.some(pattern => serverUrl.includes(pattern));
+}
+
+/**
  * Detect the current platform based on a server URL.
  *
  * Pure function — no environment access. Callers (typically the action/
@@ -65,16 +87,35 @@ export function detectPlatform(serverUrl: string): PlatformType {
     return 'forgejo';
   }
 
-  // github.com and GitHub Enterprise (github.*.com patterns)
-  if (serverUrl.includes('github.com')) {
+  // github.com, GitHub Enterprise (any hostname), and self-hosted GHE.
+  // Self-hosted GitHub Enterprise instances use custom hostnames like
+  // github.company.internal or gh.internal.corp. We catch these with a
+  // broad match before falling through to the unknown-default below.
+  if (
+    serverUrl.includes('github.com') ||
+    serverUrl.includes('.github.') ||
+    serverUrl === 'https://github.com' ||
+    serverUrl === 'http://github.com'
+  ) {
     return 'github';
   }
 
-  // Unknown server URL - cannot determine the platform
-  throw new Error(
-    `Unsupported platform server URL: ${serverUrl}. ` +
-      `Expected one of: github.com, codeberg.org, or a URL containing 'forgejo'/'gitea'.`
-  );
+  // Unknown server URL — default to 'github' for self-hosted GitHub
+  // Enterprise and other GitHub-compatible hosts.
+  //
+  // Rationale: the vast majority of unrecognised hosts are corporate GHE
+  // or GHE-like proxies. Falling back to 'github' gives them correct
+  // platform semantics (GitHub-compatible REST API). Codeberg and Forgejo
+  // are already caught by the explicit checks above.
+  //
+  // Frontends that want to surface the silent fallback (e.g. `pi-cli`
+  // warning on GitLab/Bitbucket misconfiguration) can call
+  // {@link isKnownServerUrl} to detect this branch.
+  //
+  // Users who need a non-default API base URL (e.g. GHES) should use the
+  // --server-url flag; Octokit base URL is derived from it in the CLI's
+  // octokit.ts. See packages/pi-cli/README.md for known limitations.
+  return 'github';
 }
 
 /**
@@ -85,8 +126,8 @@ export function detectPlatform(serverUrl: string): PlatformType {
  * (GitHub App, CLI, web UI).
  */
 export interface GitHubPlatformDeps {
-  /** Pre-authenticated Octokit instance. */
-  octokit: ReturnType<typeof import('@actions/github').getOctokit>;
+  /** Pre-authenticated Octokit instance (core + rest endpoint methods). */
+  octokit: import('./types').OctokitInstance;
   /** Platform context extracted from the CI/CD environment or webhook. */
   context: PlatformContext;
   /** Logger for debug/info/warning output. */

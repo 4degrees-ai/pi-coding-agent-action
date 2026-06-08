@@ -12,7 +12,11 @@ setupGitHubTestEnv({ envPathPrefix: 'gh-event-platform' });
 
 // Import after mocks are set up
 import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
-import { detectPlatform, createGitHubPlatformProvider } from '@alexanderfortin/pi-platform-github';
+import {
+  detectPlatform,
+  isKnownServerUrl,
+  createGitHubPlatformProvider,
+} from '@alexanderfortin/pi-platform-github';
 import type { GitHubPlatformDeps } from '@alexanderfortin/pi-platform-github';
 
 function makeMockDeps(overrides?: Partial<GitHubPlatformDeps>): GitHubPlatformDeps {
@@ -60,16 +64,14 @@ describe('detectPlatform', () => {
     expect(detectPlatform('https://gitea.example.com')).toBe('forgejo');
   });
 
-  test('throws for unknown non-github.com server URL', () => {
-    expect(() => detectPlatform('https://git.mycompany.com')).toThrow(
-      /Unsupported platform server URL/
-    );
+  test('returns github for unknown non-github.com server URL (default fallback)', () => {
+    // Self-hosted GHE and other GitHub-compatible hosts default to 'github'
+    // instead of throwing. See detectPlatform docstring for rationale.
+    expect(detectPlatform('https://git.mycompany.com')).toBe('github');
   });
 
-  test('throws for GitHub Enterprise-like URL (custom domain)', () => {
-    expect(() => detectPlatform('https://github.mycompany.com')).toThrow(
-      /Unsupported platform server URL/
-    );
+  test('returns github for GitHub Enterprise-like URL with custom domain', () => {
+    expect(detectPlatform('https://github.mycompany.com')).toBe('github');
   });
 
   test('detects codeberg with subpath URL', () => {
@@ -84,12 +86,66 @@ describe('detectPlatform', () => {
     expect(detectPlatform('https://gitea.example.com/')).toBe('forgejo');
   });
 
-  test('error message includes the problematic URL', () => {
-    expect(() => detectPlatform('https://unknown.host')).toThrow('https://unknown.host');
+  test('returns github for unknown host (default fallback)', () => {
+    expect(detectPlatform('https://unknown.host')).toBe('github');
+    expect(detectPlatform('https://another-unknown.host')).toBe('github');
+  });
+});
+
+describe('isKnownServerUrl', () => {
+  test('returns true for github.com', () => {
+    expect(isKnownServerUrl('https://github.com')).toBe(true);
   });
 
-  test('error message mentions supported platforms', () => {
-    expect(() => detectPlatform('https://unknown.host')).toThrow(/github\.com.*codeberg.*forgejo/i);
+  test('returns true for codeberg', () => {
+    expect(isKnownServerUrl('https://codeberg.org')).toBe(true);
+  });
+
+  test('returns true for forgejo', () => {
+    expect(isKnownServerUrl('https://forgejo.example.com')).toBe(true);
+  });
+
+  test('returns true for gitea', () => {
+    expect(isKnownServerUrl('https://gitea.example.com')).toBe(true);
+  });
+
+  test('returns true for self-hosted GHE matching .github.', () => {
+    expect(isKnownServerUrl('https://something.github.company')).toBe(true);
+    expect(isKnownServerUrl('https://github.company.internal')).toBe(true);
+  });
+
+  test("returns false for hosts only matched by detectPlatform's silent fallback", () => {
+    // detectPlatform returns 'github' for these via the unknown-host default,
+    // but isKnownServerUrl surfaces them as unrecognized so the CLI can warn.
+    expect(isKnownServerUrl('https://github.mycompany.com')).toBe(false);
+    expect(isKnownServerUrl('https://gh.internal.corp')).toBe(false);
+  });
+
+  test('returns false for an unrecognized host (GitLab/Bitbucket case)', () => {
+    expect(isKnownServerUrl('https://gitlab.com')).toBe(false);
+    expect(isKnownServerUrl('https://bitbucket.org')).toBe(false);
+    expect(isKnownServerUrl('https://git.mycompany.com')).toBe(false);
+  });
+
+  test('returns false for empty string', () => {
+    expect(isKnownServerUrl('')).toBe(false);
+  });
+
+  test('agrees with detectPlatform for hosts matched by explicit patterns', () => {
+    // detectPlatform also returns 'github' for unrecognized hosts via its
+    // silent fallback. isKnownServerUrl only returns true for hosts matched
+    // by explicit patterns (the cases above). The list below must NOT
+    // include fallback-only hosts like 'https://github.mycompany.com'.
+    const explicitMatch = [
+      'https://github.com',
+      'https://codeberg.org',
+      'https://forgejo.example.com',
+      'https://gitea.example.com',
+      'https://something.github.company', // matches '.github.' substring
+    ];
+    for (const url of explicitMatch) {
+      expect(isKnownServerUrl(url)).toBe(true);
+    }
   });
 });
 
