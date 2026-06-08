@@ -1,36 +1,25 @@
 # `@alexanderfortin/pi-cli`
 
-> Terminal frontend for the Pi orchestrator. Runs the same agent + tools as the [GitHub Action](https://github.com/shaftoe/pi-coding-agent-action), from a local shell.
+> **Proof-of-concept** terminal client for the [Pi orchestrator](../pi-orchestrator).
 
-**Status:** M1 — internal-only, workspace package. Public npm release + bundling are tracked as milestone M4 in the [design RFC](../../docs/plans/cli-frontend.md).
+This package demonstrates that the core business logic in
+`@alexanderfortin/pi-orchestrator` and `@alexanderfortin/pi-platform-github` is
+truly frontend-agnostic by wiring it up from a second entry point (a local
+terminal) alongside the primary GitHub Action frontend.
+
+**Status:** Proof of concept — feature-complete for the validation goal, not
+under active development. The learnings from this package will feed into a
+dedicated Pi extension that lets Pi drive development via the GitHub Action
+from within the agent itself.
 
 ---
 
-## What M1 does
+## What it does
 
-`pi-cli run "<prompt>"` against any GitHub-compatible repo, with the same toolset as the GitHub Action (`get_pr_diff`, `get_ci_status`, `create_pull_request`, etc.). Output goes to stdout. Thinking deltas go to stderr.
-
-Nothing else. The full feature matrix (`--pr`, `--issue`, `--post-comment`, `--export-session-html`, `review`, `thread`, etc.) lands in M2 / M3.
-
-## Install (workspace only, M1)
-
-From a clone of this repo:
-
-```bash
-bun install
-```
-
-## Usage
-
-```bash
-export GITHUB_TOKEN=ghp_...
-export ANTHROPIC_API_KEY=sk-ant-...
-
-bun pi-cli run "explain what packages/pi-orchestrator does" \
-  --repo shaftoe/pi-coding-agent-action \
-  --provider anthropic \
-  --model claude-sonnet-4-5
-```
+`pi-cli run "<prompt>"` runs the same agent + tool set as the
+[GitHub Action](https://github.com/shaftoe/pi-coding-agent-action) against any
+GitHub-compatible repo, from a local shell. Output goes to stdout; thinking
+deltas go to stderr.
 
 ### Flags
 
@@ -56,8 +45,6 @@ Two env vars are required, no flags, no `gh auth token` fallback:
 | LLM provider | Provider-specific (see table below) |
 
 #### Provider env table
-
-Sourced from [`pi/docs/providers.md`](https://docs.pi.dev/providers):
 
 | Provider id | Env var |
 | --- | --- |
@@ -90,16 +77,20 @@ Sourced from [`pi/docs/providers.md`](https://docs.pi.dev/providers):
 
 (Missing one? The full list with notes is in `src/auth.ts`.)
 
+## Usage
+
+```bash
+export GITHUB_TOKEN=ghp_...
+export ANTHROPIC_API_KEY=sk-ant-...
+
+bun pi-cli run "explain what packages/pi-orchestrator does" \
+  --repo shaftoe/pi-coding-agent-action \
+  --provider anthropic \
+  --model claude-sonnet-4-5
+```
+
 ## Tests
 
 ```bash
 bun test packages/pi-cli/
 ```
-
-## Roadmap
-
-- **M2** — full flag matrix: `--pr`, `--issue`, `--post-comment`, `--add-reaction`, `--system-prompt`, `--export-session-*`, all diff flags, `--out json|none`.
-- **M3** — `review` and `thread` subcommands; remote URL auto-detection from `git remote get-url origin`; promote shared `GitAdapter` helper into `pi-orchestrator`.
-- **M4** — esbuild bundle; `private: false`; first npm release.
-
-See [`docs/plans/cli-frontend.md`](../../docs/plans/cli-frontend.md) for the full RFC.

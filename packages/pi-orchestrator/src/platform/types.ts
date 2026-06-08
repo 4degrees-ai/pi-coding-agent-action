@@ -39,7 +39,7 @@ export interface PlatformContext {
   /**
    * The current workflow run ID.
    *
-   * Optional so non-CI frontends (e.g. `pi-cli`) can omit it.
+   * Optional so non-CI frontends can omit it.
    * `buildActionRunUrl()` returns `undefined` when `runId` is missing,
    * which suppresses the "View action run" footer on posted comments.
    */

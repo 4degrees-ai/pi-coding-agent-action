@@ -12,7 +12,7 @@
  *    (e.g. `ANTHROPIC_API_KEY` for `--provider anthropic`).
  *
  * Both are env-var-only by design: no `--token` flags, no `gh auth token`
- * fallback, no keychain reads. See RFC §6 (cli-frontend.md).
+ * fallback, no keychain reads.
  */
 
 /**

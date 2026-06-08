@@ -45,7 +45,7 @@ import type {
  * Substring patterns that identify a recognized git host. Matches the
  * branches of {@link detectPlatform}.
  *
- * Exported so frontends (e.g. `pi-cli`) can warn when a user points at a
+ * Exported so frontends can warn when a user points at a
  * host that doesn't match any known pattern — `detectPlatform` silently
  * falls back to `'github'` for unrecognized hosts, so callers that want
  * to surface the fallback must check this predicate themselves.
@@ -108,13 +108,8 @@ export function detectPlatform(serverUrl: string): PlatformType {
   // platform semantics (GitHub-compatible REST API). Codeberg and Forgejo
   // are already caught by the explicit checks above.
   //
-  // Frontends that want to surface the silent fallback (e.g. `pi-cli`
-  // warning on GitLab/Bitbucket misconfiguration) can call
+  // Frontends that want to surface the silent fallback can call
   // {@link isKnownServerUrl} to detect this branch.
-  //
-  // Users who need a non-default API base URL (e.g. GHES) should use the
-  // --server-url flag; Octokit base URL is derived from it in the CLI's
-  // octokit.ts. See packages/pi-cli/README.md for known limitations.
   return 'github';
 }
 
