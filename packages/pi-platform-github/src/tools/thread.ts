@@ -186,7 +186,7 @@ export function mapReviewComment(
     author: comment.user?.login ?? 'unknown',
     author_type: comment.user?.type === 'Bot' ? 'bot' : 'user',
     created_at: comment.created_at,
-    body: sanitizeContent(comment.body),
+    body: sanitizeContent(comment.body ?? ''),
     ...(comment.in_reply_to_id ? { in_reply_to_id: comment.in_reply_to_id } : {}),
   };
 }

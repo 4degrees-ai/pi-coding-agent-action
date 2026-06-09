@@ -95,7 +95,9 @@ const CONTEXT_EXTRACTORS: Record<
     return {
       title: issue.title,
       number: issue.number,
-      ...(issue.body !== undefined ? { body: sanitizeContent(issue.body) } : {}),
+      ...(issue.body !== null && issue.body !== undefined
+        ? { body: sanitizeContent(issue.body) }
+        : {}),
     };
   },
   // fallow-ignore-next-line complexity
@@ -109,7 +111,7 @@ const CONTEXT_EXTRACTORS: Record<
     return {
       title: pr.title,
       number: pr.number,
-      ...(pr.body !== undefined ? { body: sanitizeContent(pr.body) } : {}),
+      ...(pr.body !== null && pr.body !== undefined ? { body: sanitizeContent(pr.body) } : {}),
     };
   },
 };
@@ -298,6 +300,6 @@ async function getComment(deps: GitHubModuleDeps): Promise<TriggeringComment | u
     return;
   }
 
-  const body = sanitizeContent((comment.body as string).replace(getTrigger(deps), '').trim());
+  const body = sanitizeContent((comment.body ?? '').replace(getTrigger(deps), '').trim());
   return { id: comment.id, body };
 }

@@ -16,6 +16,7 @@ import {
   createAgentSessionServices,
   ModelRegistry,
   SessionManager,
+  SettingsManager,
 } from '@earendil-works/pi-coding-agent';
 import { buildResourceLoaderOptions } from './resource-loader';
 import { getPiVersion } from '../version';
@@ -116,11 +117,16 @@ export class Agent {
       loaderConfig
     );
 
+    const cwd = this.config.cwd ?? process.cwd();
+
+    const settingsManager = SettingsManager.create(cwd);
+
     // Phase 1: Create services (loads extensions, registers providers).
     const services = await createAgentSessionServices({
-      cwd: this.config.cwd ?? process.cwd(),
+      cwd,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
+      settingsManager,
       resourceLoaderOptions,
     });
 
@@ -159,7 +165,8 @@ export class Agent {
     // Use a file-backed session when HTML/JSONL export is needed — the SDK's
     // exportToHtml() requires a session file and throws "Cannot export
     // in-memory session to HTML" for in-memory sessions.
-    const needsPersistence = this.config.exportSessionHtml ?? this.config.exportSessionJsonl;
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional ||: flags can be explicitly false, must fall through
+    const needsPersistence = this.config.exportSessionHtml || this.config.exportSessionJsonl;
     const sessionManager = needsPersistence
       ? SessionManager.create(services.cwd)
       : SessionManager.inMemory(services.cwd);

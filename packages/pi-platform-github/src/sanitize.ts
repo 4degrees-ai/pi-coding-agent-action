@@ -20,7 +20,10 @@
  * @param text - The raw text from a GitHub API response (issue body, comment, etc.)
  * @returns The cleaned text with hidden content removed.
  */
-export function sanitizeContent(text: string): string {
+export function sanitizeContent(text: string | null | undefined): string {
+  if (text === null || text === undefined) {
+    return '';
+  }
   return (
     text
       // Remove HTML comments (may span multiple lines)
