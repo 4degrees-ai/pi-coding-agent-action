@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-06-09
+
+### Added
+
+- add CLI protoype (#266)
+- add content sanitization for user-provided content (#210)
+- add pr_number input for workflow_dispatch support (#278)
+- set project trust when creating Pi agent session (#284)
+
+### Changed
+
+- fix typo in README.md
+- simplify PI_PACKAGE_DIR workaround using SDK's exported getPackageDir() (#285)
+- **deps**: update dependencies (#270)
+- **deps-dev**: update dependencies (#275)
+- **deps**: update dependencies (#280)
+- Update README.md
+
+### Fixed
+
+- update release workflow, use correct versions for dev and v2
+- use file-backed session when HTML/JSONL export is enabled (#283)
+
 ## [2.19.3] - 2026-06-05
 
 ### Changed
@@ -456,7 +479,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.3...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.0...HEAD
+[2.20.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.3...v2.20.0
 [2.19.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.2...v2.19.3
 [2.19.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.1...v2.19.2
 [2.19.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.0...v2.19.1
