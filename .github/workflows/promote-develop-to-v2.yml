@@ -15,52 +15,29 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: promote-v2
+  cancel-in-progress: false
+
 jobs:
   promote:
-    name: Fast-forward v2 to develop
+    name: Hard-reset v2 to develop
     runs-on: ubuntu-latest
 
     steps:
-      - name: Guard — must run on v2
-        run: |
-          if [ "${GITHUB_REF_NAME}" != "v2" ]; then
-            echo "::error::promote must be dispatched on 'v2' (got '${GITHUB_REF_NAME}')"
-            exit 1
-          fi
-
-      - name: Checkout
+      - name: Checkout develop
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: v2
+          ref: develop
 
-      - name: Check if v2 can fast-forward to develop
-        id: check
+      - name: Log delta
         run: |
-          git fetch origin develop
-          MERGE_BASE=$(git merge-base origin/v2 origin/develop)
-          V2_HEAD=$(git rev-parse origin/v2)
-
-          if [ "$MERGE_BASE" = "$V2_HEAD" ]; then
-            echo "can_ff=true" >> "$GITHUB_OUTPUT"
-            DEVELOP_HEAD=$(git rev-parse origin/develop)
-            echo "develop_head=$DEVELOP_HEAD" >> "$GITHUB_OUTPUT"
-            echo "::notice::v2 can be fast-forwarded to develop ($DEVELOP_HEAD)"
-          else
-            echo "can_ff=false" >> "$GITHUB_OUTPUT"
-            echo "::error::v2 has diverged from develop and cannot be fast-forwarded"
-            echo "v2 HEAD:      $V2_HEAD"
-            echo "develop HEAD: $(git rev-parse origin/develop)"
-            echo "merge base:   $MERGE_BASE"
-            exit 1
-          fi
-
-      - name: Fast-forward v2 to develop
-        if: steps.check.outputs.can_ff == 'true'
-        run: |
-          git merge --ff-only origin/develop
-          echo "New v2 HEAD: $(git rev-parse HEAD)"
-          git log --oneline origin/v2..HEAD
+          git fetch origin v2
+          echo "=== Commits on develop not in v2 ==="
+          git log --oneline origin/v2..origin/develop
+          echo "=== Commits on v2 not in develop (will be dropped) ==="
+          git log --oneline origin/develop..origin/v2
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -68,40 +45,61 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Rebuild bare (release) dist
+      # ── Phase 1: Build & commit develop dist (version: X.Y.Z-develop.<sha>) ──
+
+      - name: Rebuild dist for develop
         run: bun run package
+        env:
+          GITHUB_REF_NAME: develop
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Commit develop dist
+        id: develop_dist
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f dist/
+          if git diff --cached --exit-code -- dist/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            git reset -- dist/ > /dev/null 2>&1 || true
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git commit --no-verify -m "chore: rebuild dist [skip ci]"
+          fi
+
+      - name: Push dist commit to develop
+        if: inputs.dry_run != 'true' && steps.develop_dist.outputs.changed == 'true'
+        run: git push origin develop
+
+      # ── Phase 2: Force-push v2 (same tree, rebuild dist with clean semver) ──
+
+      - name: Rebuild dist for v2
+        run: bun run package
+        env:
+          GITHUB_REF_NAME: v2
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Commit v2 dist
+        id: v2_dist
+        run: |
+          git add -f dist/
+          if git diff --cached --exit-code -- dist/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            git reset -- dist/ > /dev/null 2>&1 || true
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git commit --no-verify -m "chore: rebuild dist [skip ci]"
+          fi
 
       - name: Dry run - skip push
         if: inputs.dry_run == 'true'
         run: |
           echo "::notice::Dry run enabled - changes will NOT be pushed"
-          echo "The following commits would be added to v2:"
-          git log --oneline origin/v2..HEAD
+          echo "v2 would be force-pushed to: $(git rev-parse HEAD)"
 
-      - name: Commit release dist and push to both v2 and develop
+      - name: Force-push v2
         if: inputs.dry_run != 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dist/
-          git diff --cached --exit-code -- dist/ || {
-            git commit --no-verify -m "chore: release dist v$(node -p "require('./package.json').version") [skip ci]"
-          }
-          git push origin v2
-          git push origin v2:develop
-
-      - name: Dispatch package.yml on develop
-        if: inputs.dry_run != 'true'
-        uses: actions/github-script@v9
-        with:
-          github-token: ${{ secrets.GH_PAT }}
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'package.yml',
-              ref: 'develop',
-            });
+        run: git push --force-with-lease origin HEAD:refs/heads/v2
 
       - name: Trigger release workflow
         if: inputs.dry_run != 'true'
