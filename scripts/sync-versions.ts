@@ -5,24 +5,26 @@
  * Called by semantic-release post-version hook to keep all packages aligned.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const rootPkg = JSON.parse(readFileSync('package.json', 'utf-8'));
 const version = rootPkg.version;
 
-const packages = ['pi-orchestrator', 'pi-platform-github', 'pi-action'];
+const packages = readdirSync('packages', { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name);
 
 for (const pkg of packages) {
   const path = join('packages', pkg, 'package.json');
   const pkgJson = JSON.parse(readFileSync(path, 'utf-8'));
 
   if (pkgJson.version === version) {
-    console.log(`✓ ${pkg} already at v${version}`);
+    console.info(`✓ ${pkg} already at v${version}`);
     continue;
   }
 
   pkgJson.version = version;
   writeFileSync(path, JSON.stringify(pkgJson, null, 2) + '\n');
-  console.log(`↑ ${pkg} updated to v${version}`);
+  console.info(`↑ ${pkg} updated to v${version}`);
 }
