@@ -19,11 +19,18 @@ Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 
 ## Features
 
+- **Familiar workflow**: Supports the familiar workflow of running Pi coding agent as CLI (loading skills, extensions, AGENTS.md, etc.) in a GitHub CI/CD workflow.
+- **Minimal batteries included**: Tries to follow Pi minimalistic phylosophy while providing a comfortable UX out of the box, e.g. pretty print of logs, auto replies to comments, and tools to interact efficiently with git and GitHub-compatible APIs.
+- **Composable**: Provides useful inputs and outputs for chaining together multiple Pi sessions and/or other GitHub actions/workflows.
+- **Integrates with GitHub workflows**: Natively integrates with usual GitHub issue/PR workflows, invoke Pi both interactively (e.g. prefixing `/pi ` in an issue/PR comment) and programmatically (e.g. as a step in a workflow).
+- **Up-to-date**: Pi SDK and dependencies updated regularly.
+
+## Use cases
+
 - **Issue assistance**: Prefix any new issue description and/or any issue comment with `/pi ` to have the agent analyze the issue, generate a report and/or create a new PR with the fix
 - **PR assistance**: Prefix any PR comment, review comment or review message with `/pi ` to have the agent review the pull request and/or to apply further changes
 - **Automated code reviews**: Have Pi review every new pull request automatically
 - **Add Pi to your own pipelines**: (Optionally) generate prompt from upstream actions/workflows and have Pi do the work in background for you anywhere you like in your workflows
-- **Minimal batteries included**: Tries to follow Pi minimalistic phylosophy while providing a comfortable UX out of the box, e.g. pretty print of logs, auto replies to comments, and tools to interact efficiently with git and GitHub-compatible APIs.
 
 ## Goal
 
@@ -45,11 +52,6 @@ For all the rest you're free and encouraged to just configure the action environ
 
 Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn how to tweak Pi to best fit your needs.
 
-## Disclaimer
-
-> [!NOTE]
-> Codeberg/Forgejo compatibility _should_ work but hasn't been tested yet.
-
 ## Securing your workflows
 
 > [!WARNING]
@@ -58,14 +60,15 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 > [!IMPORTANT]
 > The `develop` and `v2` branches are in constant development so if you don't want the bleeding edge you should pin to the latest release, e.g.
 > ```yaml
->    uses: shaftoe/pi-coding-agent-action@v2.19.3
+>    uses: shaftoe/pi-coding-agent-action@v2.20.0
 > ```
 
 > [!CAUTION]
 > **GitHub `GITHUB_TOKEN` cannot push changes to files under `.github/workflows/`.** This is a [GitHub security restriction](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication) — even when the workflow has `contents: write` permission, the automatic `GITHUB_TOKEN` is **never** allowed to create or modify workflow files. If you need Pi to create PRs that touch `.github/workflows/*.yml`, you must provide a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) with the `workflow` scope instead of the default `GITHUB_TOKEN`.
 
 > [!CAUTION]
-> **Project trust is automatically enabled.** The Pi SDK (v0.79.0+) uses a project trust system to decide whether to load project-level resources such as `AGENTS.md`, `.pi` settings, project extensions, and skills. In a CI environment there is no interactive user to approve trust, so this action **always marks the workspace as trusted** (`projectTrusted: true`) when creating the agent session. This means any `AGENTS.md`, `.pi/` configuration, or project extensions present in the repository checkout will be loaded and followed by the agent. Keep this in mind when deciding what to commit to your repository — anyone with push access can influence agent behavior through these files.
+> **Project trust is automatically enabled.** The Pi SDK (v0.79.0+) uses a [project trust system](https://pi.dev/docs/latest/security#project-trust) to decide whether to load project-level resources such as `AGENTS.md`, `.pi` settings, project extensions, and skills. In a CI environment there is no interactive user to approve trust, so this action **always marks the workspace as trusted** (`projectTrusted: true`) when creating the agent session. This means any `AGENTS.md`, `.pi/` configuration, or project extensions present in the repository checkout will be loaded and followed by the agent. Keep this in mind when deciding what to commit to your repository — anyone with push access can influence agent behavior through these files.
+> See [the official Pi documentation](https://pi.dev/docs/latest/security#project-trust) for more information on project trust.
 
 ## Bundled Dependencies
 
@@ -94,6 +97,11 @@ Dependencies (including Pi itself) are [updated regularly](./.github/workflows/d
 
 > [!NOTE]
 > If you don't want to use latest and greatest dependencies, pin the action to a specific release, e.g. `uses: shaftoe/pi-coding-agent-action@v2.0.0`
+
+## Disclaimer
+
+> [!NOTE]
+> Codeberg/Forgejo compatibility _should_ work but hasn't been tested yet.
 
 ## Usage
 
