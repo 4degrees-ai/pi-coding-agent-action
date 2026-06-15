@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.1] - 2026-06-15
+
+### Changed
+
+- **deps-dev**: bump codecov/codecov-action from 6 to 7 (#302)
+- **deps-dev**: update dependencies (#294)
+- **deps-dev**: update dependencies (#299)
+- **deps**: update dependencies (#301)
+- **deps**: update dependencies (#303)
+- **deps**: update dependencies (#304)
+- update readme
+
+### Fixed
+
+- run update-readme in release prepareCmd to sync dependency versions (#287)
+- update readme deps to only list bundled dependencies (#298)
+
 ## [2.19.3] - 2026-06-05
 
 ### Changed
@@ -456,7 +473,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.3...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.1...HEAD
+[2.20.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.0...v2.20.1
 [2.19.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.2...v2.19.3
 [2.19.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.1...v2.19.2
 [2.19.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.0...v2.19.1
