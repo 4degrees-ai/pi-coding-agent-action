@@ -1,15 +1,11 @@
 name: Release
 
+# Gates on the full test+e2e suite, then runs semantic-release. After a release
+# is cut, the release commit (version bump, clean dist, CHANGELOG) is merged
+# back into `develop` with `git merge --ff-only` so `develop` and `v2` stay equal.
+
 on:
-  push:
-    branches:
-      - v2
-    paths:
-      - 'packages/**'
-      - 'tests/**'
-      - 'package.json'
-      - 'bun.lock'
-      - '.github/workflows/release.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -29,10 +25,12 @@ jobs:
     name: semantic-release
     runs-on: ubuntu-latest
     needs: test-and-coverage
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: v2
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -46,3 +44,17 @@ jobs:
         uses: cycjimmy/semantic-release-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge release commit back to develop
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin develop v2
+          git checkout -B develop origin/develop
+          if git merge --ff-only origin/v2; then
+            git push origin develop
+            echo "Merged release commit back into develop ✓"
+          else
+            echo "::warning::develop is not a fast-forward of v2; skipping merge-back (manual sync needed)"
+          fi

@@ -1,0 +1,78 @@
+name: Promote develop to v2
+
+# Fast-forward `v2` to `develop@HEAD`, push it, then call the reusable
+# `release.yml` workflow to run the e2e gate + semantic-release + merge-back.
+#
+# We call `release.yml` directly (rather than relying on its `push:` trigger)
+# because the bot's v2 push uses GITHUB_TOKEN — which never fires push events —
+# and develop's HEAD is usually a `[skip ci]` chore(dist) commit anyway.
+#
+# `v2` is NEVER hard-reset — only ever advanced with `git merge --ff-only`.
+# If v2 has diverged from develop (e.g. a stray commit), this fails loudly
+# instead of discarding history.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run without pushing (dry run)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  id-token: write
+  contents: write
+
+concurrency:
+  group: promote-v2
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Fast-forward v2 to develop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward v2 to develop
+        run: |
+          set -euo pipefail
+          git fetch origin develop v2
+          git checkout -B v2 origin/v2
+
+          echo "=== Commits on develop not in v2 (to be promoted) ==="
+          git log --oneline origin/v2..origin/develop || true
+
+          echo "=== Commits on v2 not in develop (would break fast-forward) ==="
+          if [ -n "$(git rev-list origin/develop..origin/v2)" ]; then
+            git log --oneline origin/develop..origin/v2
+            echo "::error::v2 has commits not in develop; fast-forward is impossible."
+            echo "::error::Run the release flow so the release commit merges back to develop, or sync manually."
+            exit 1
+          fi
+
+          git merge --ff-only origin/develop
+          echo "Promoted: v2 -> $(git rev-parse --short HEAD)"
+
+      - name: Dry run - skip push
+        if: inputs.dry_run == 'true'
+        run: |
+          echo "::notice::Dry run enabled — v2 would be pushed to $(git rev-parse HEAD)"
+
+      - name: Push v2
+        if: inputs.dry_run != 'true'
+        run: git push origin v2
+
+  release:
+    name: Cut release
+    needs: promote
+    if: inputs.dry_run != 'true'
+    uses: ./.github/workflows/release.yml
+    secrets: inherit

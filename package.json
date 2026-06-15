@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "package": "bun packages/pi-action/scripts/package.ts",
+    "dist-version": "bun run scripts/dist-version.ts",
+    "dist-commit-msg": "bun run scripts/dist-commit-msg.ts",
     "pi-cli": "bun packages/pi-cli/src/index.ts",
     "prepare": "bun run package",
     "test": "bun test",

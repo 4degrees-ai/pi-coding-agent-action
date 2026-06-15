@@ -3,61 +3,30 @@ import { createRequire } from 'node:module';
 import { build, type Plugin } from 'esbuild';
 import { join, dirname } from 'node:path';
 
-/**
- * Regex matching release branches: v2, v3, v10, …
- *
- * Exported for unit testing.
- */
-export const RELEASE_BRANCH_RE = /^v\d+$/;
+// Pure version/provenance helpers live in `./version` so they can be shared
+// with the CI dist-rebuild scripts (and unit-tested) without pulling in esbuild.
+import {
+  composeActionVersion,
+  composeDistCommitMessage,
+  readJsonVersion,
+  RELEASE_BRANCH_RE,
+  resolveBranch,
+  resolveSha,
+  sanitizeSemverIdent,
+  type DistBuildProvenance,
+} from './version';
 
-/**
- * Resolve branch name from the GitHub-native `GITHUB_REF_NAME` env var,
- * falling back to `'unknown'` when not running in CI.
- */
-function resolveBranch(): string {
-  return process.env.GITHUB_REF_NAME ?? 'unknown';
-}
-
-/**
- * Resolve short (7-char) commit SHA from the GitHub-native `GITHUB_SHA` env
- * var, falling back to `'unknown'` when not running in CI.
- */
-function resolveSha(): string {
-  return (process.env.GITHUB_SHA ?? 'unknown').slice(0, 7);
-}
-
-/**
- * Sanitize a string for use in semver prerelease identifiers.
- *
- * Semver prerelease identifiers allow only `[0-9A-Za-z-]` plus `.` separators.
- * Characters like `/` in branch names (e.g. `feature/foo`) are replaced with `-`.
- */
-function sanitizeSemverIdent(ident: string): string {
-  return ident.replace(/[^0-9A-Za-z-]/g, '-');
-}
-
-/**
- * Compose the action version string from the base version and ambient
- * GitHub-native env vars.
- *
- * - **Release branch** (`GITHUB_REF_NAME` matches `/^v\d+$/`): bare semver,
- *   e.g. `2.19.3`.
- * - **Any other branch**: `<base>-<branch>.<sha>` (semver prerelease),
- *   e.g. `2.19.3-develop.9272858`.
- * - **No env vars** (local build): `<base>-unknown.unknown`.
- *
- * Exported for unit testing.
- */
-export function composeActionVersion(
-  baseVersion: string,
-  branch: string = resolveBranch(),
-  sha: string = resolveSha()
-): string {
-  if (RELEASE_BRANCH_RE.test(branch)) {
-    return baseVersion;
-  }
-  return `${baseVersion}-${sanitizeSemverIdent(branch)}.${sanitizeSemverIdent(sha)}`;
-}
+// Re-export for backward compatibility — tests import these from this module.
+export {
+  composeActionVersion,
+  composeDistCommitMessage,
+  readJsonVersion,
+  RELEASE_BRANCH_RE,
+  resolveBranch,
+  resolveSha,
+  sanitizeSemverIdent,
+  type DistBuildProvenance,
+};
 
 /**
  * esbuild plugin that patches the SDK's `getAliases()` function to handle
@@ -107,16 +76,6 @@ function patchSDKLoaderPlugin(): Plugin {
       });
     },
   };
-}
-
-/**
- * Read the `version` field from a JSON file at `path`. Throws if the file
- * is missing, unreadable, or its JSON lacks a `version` field.
- *
- * Exported for unit testing.
- */
-export function readJsonVersion(path: string): string {
-  return JSON.parse(readFileSync(path, 'utf-8')).version;
 }
 
 /**

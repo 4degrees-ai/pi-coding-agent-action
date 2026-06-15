@@ -3,8 +3,7 @@ name: Fallow Analysis
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  push:
-    branches: [develop, v2]
+  workflow_call:
   workflow_dispatch:
 
 permissions:

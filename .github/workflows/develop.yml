@@ -1,0 +1,87 @@
+name: Develop CI
+
+# Single, fully-gated pipeline for every push to `develop`:
+#
+#   validate + unit tests + coverage ─┐
+#   e2e tests                         ─┤  (all green?)
+#   fallow analysis                   ─┘        │
+#                                          ┌─────┴──────────────┐
+#                                          ▼                    ▼
+#                              rebuild dist (gated)   update README deps (gated)
+#                              commit + push          commit + push
+#
+# Both `rebuild-dist` and `update-readme` only run once tests + e2e + fallow
+# are green, so a broken `develop` never ships a new `dist/`. Commits use
+# `[skip ci]` so they don't retrigger this workflow.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+  security-events: write
+
+concurrency:
+  group: develop-pipeline
+  cancel-in-progress: false
+
+jobs:
+  build-test-coverage:
+    name: Validate, test & e2e
+    uses: ./.github/workflows/build_test_coverage.yml
+    with:
+      e2e: true
+    secrets:
+      token: ${{ secrets.API_KEY }}
+      token_custom: ${{ secrets.API_KEY_CUSTOM }}
+
+  fallow:
+    name: Fallow analysis
+    uses: ./.github/workflows/fallow.yml
+    secrets: inherit
+
+  rebuild-dist:
+    name: Rebuild dist
+    needs: [build-test-coverage, fallow]
+    uses: ./.github/workflows/rebuild-dist.yml
+    secrets: inherit
+
+  update-readme:
+    name: Update README deps
+    needs: rebuild-dist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Update dependency versions in README
+        run: bun run update-readme
+
+      - name: Check for changes
+        id: check
+        run: |
+          git add -f README.md
+          if git diff --cached --exit-code -- README.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            git reset -- README.md > /dev/null 2>&1 || true
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit --no-verify -m "chore: update README deps [skip ci]"
+          git pull --rebase origin develop --autostash
+          git push origin develop

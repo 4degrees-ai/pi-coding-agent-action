@@ -93,7 +93,7 @@ Dependencies (including Pi itself) are [updated regularly](./.github/workflows/d
 
 <!-- DEPS_TABLE_END -->
 
-> _This table is auto-updated by the [`package.yml`](./.github/workflows/package.yml) workflow whenever dependencies change._
+> _This table is auto-updated by the [`develop.yml`](./.github/workflows/develop.yml) workflow whenever dependencies change._
 
 > [!NOTE]
 > If you don't want to use latest and greatest dependencies, pin the action to a specific release, e.g. `uses: shaftoe/pi-coding-agent-action@v2.0.0`
@@ -647,18 +647,22 @@ bun run test:e2e
 
 ### Releasing
 
-The project uses a `develop` → `v2` branching strategy:
+The project uses a `develop` → `v2` branching strategy with **fast-forward promotion only** (never a hard-reset). The full design, rationale, and edge cases live in [`release.md`](./release.md); this section is the quick-reference.
 
-- **`develop`** is the default branch. All PRs target it. The `package.yml` workflow auto-commits `dist/` changes here.
-- **`v2`** is the release branch. Merges into `v2` trigger [release.yml](./.github/workflows/release.yml), which runs tests and `semantic-release`.
+#### Branches
 
-To cut a release:
+- **`develop`** — default branch; all PRs target it. Every push runs [develop.yml](./.github/workflows/develop.yml): `validate` + unit tests + **e2e** + [Fallow](https://docs.fallow.tools/). Only when all of those are green does it rebuild `dist/` — committing a provenance message of the form `chore(dist): rebuild X.Y.Z-develop.<sha>` (recording the source SHA and bundled Pi SDK version) — and refresh README deps. Both auto-commits use `[skip ci]`.
+- **`v2`** — release branch. It only ever advances via `git merge --ff-only` from `develop`. [release.yml](./.github/workflows/release.yml) runs the e2e gate, then `semantic-release` (version bump + clean `dist/` + tag + GitHub release), and finally fast-forwards the release commit **back into `develop`** so the two branches stay equal.
 
-```bash
-git switch v2
-git merge develop
-git push origin v2
-```
+#### Cutting a release
+
+The recommended path is the **Promote develop to v2** workflow (no PAT required, no double-runs):
+
+1. **Actions → "Promote develop to v2" → Run workflow.** It fast-forwards `v2` to `develop@HEAD`, pushes `v2`, then calls `release.yml` as a reusable workflow to run the e2e gate + `semantic-release` + merge-back to `develop`.
+2. Optionally run it with **dry-run** first to confirm the fast-forward is clean (it fails loudly if `v2` has diverged from `develop`).
+
+> [!NOTE]
+> `semantic-release` is driven by [conventional commits](https://www.conventionalcommits.org/) (see [`.releaserc.json`](./.releaserc.json)). `feat:` → minor, `fix:`/`chore(deps):` → patch, `BREAKING CHANGE` → major. A `chore(dist)` promote/auto-commit is a non-releasable scope and will not itself trigger a release. If there are no new releasable commits since the last tag, `semantic-release` is a no-op.
 
 ### References
 

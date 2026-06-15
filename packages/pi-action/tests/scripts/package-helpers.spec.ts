@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   composeActionVersion,
+  composeDistCommitMessage,
   copyAllSdkAssets,
   copySdkAssetDir,
   readJsonVersion,
@@ -191,6 +192,51 @@ describe('readJsonVersion', () => {
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// composeDistCommitMessage
+// ---------------------------------------------------------------------------
+
+describe('composeDistCommitMessage', () => {
+  test('produces a structured provenance message', () => {
+    const msg = composeDistCommitMessage({
+      fullVersion: '2.20.1-develop.9272858',
+      branch: 'develop',
+      sourceSha: '9272858abcdef0',
+      piSdkVersion: '0.79.4',
+    });
+    expect(msg).toBe(
+      [
+        'chore(dist): rebuild 2.20.1-develop.9272858 [skip ci]',
+        '',
+        'source:   9272858abcdef0',
+        'branch:   develop',
+        'pi-sdk:   0.79.4',
+      ].join('\n')
+    );
+  });
+
+  test('uses bare semver in the subject for release-branch builds', () => {
+    const msg = composeDistCommitMessage({
+      fullVersion: '2.20.1',
+      branch: 'v2',
+      sourceSha: 'deadbeef',
+      piSdkVersion: '0.79.4',
+    });
+    expect(msg.startsWith('chore(dist): rebuild 2.20.1 [skip ci]')).toBe(true);
+    expect(msg).toContain('branch:   v2');
+  });
+
+  test('always carries [skip ci] so it never re-triggers CI', () => {
+    const msg = composeDistCommitMessage({
+      fullVersion: '1.0.0-develop.abc',
+      branch: 'develop',
+      sourceSha: 'abc',
+      piSdkVersion: '1.0.0',
+    });
+    expect(msg).toContain('[skip ci]');
   });
 });
 
