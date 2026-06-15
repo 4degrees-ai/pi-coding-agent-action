@@ -22,6 +22,11 @@ Monorepo managed with Bun workspaces (`packages/*`):
   - `src/adapters/` — GitHub-Actions-specific adapters: `CoreAdapter` (`@actions/core`), `GitAdapter`, `PiAgentAdapter`, `ConfigAdapter`, `OutputSink`.
   - `scripts/package.ts` — esbuild bundling for the action release artifact.
 
+- **`packages/pi-cli`** (`@alexanderfortin/pi-cli`, private) — Terminal frontend for the Pi orchestrator. A standalone CLI binary that runs the same agent + tools as the GitHub Action, headlessly from a local shell (`pi-cli run <prompt>`). Depends on `pi-orchestrator` + `pi-platform-github`; constructs a synthetic `PlatformContext` + provider via `createCliOctokit()` / `buildPlatformContext()` (proof-of-concept client, not a Pi extension).
+  - `src/index.ts` — commander program (`run` subcommand).
+  - `src/commands/run.ts` — wires argv → token → Octokit + provider → `ActionOrchestrator`.
+  - `src/{octokit,context,auth,config}.ts` — CLI-side Octokit/context/token/config construction.
+
 - **`tests/`** (root) — E2E tests (`tests/e2e/`) plus their local fixtures (`tests/e2e/fixtures/`).
 - **`scripts/`** (root) — Repo-level tooling (changelog, version sync, readme deps).
 

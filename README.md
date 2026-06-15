@@ -647,7 +647,7 @@ bun run test:e2e
 
 ### Releasing
 
-The project uses a `develop` → `v2` branching strategy with **fast-forward promotion only** (never a hard-reset). The full design, rationale, and edge cases live in [`release.md`](./release.md); this section is the quick-reference.
+The project uses a `develop` → `v2` branching strategy with **fast-forward promotion only** (never a hard-reset).
 
 #### Branches
 
