@@ -55,15 +55,18 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 ## Securing your workflows
 
 > [!WARNING]
+> We recommend to be as conservative as possible with how the action can be triggered.
 > Depending on the permissions assigned to your workflow you should consider restricting who's allowed to trigger it e.g. filtering for GitHub user name or role (`if github.actor == '<my-user>'`).
+> You should also consider disabling automated PRs reviews for forks (`if: github.event.pull_request.head.repo.fork == false`), see [Review PR](.github/workflows/pr.yml) workflow for an actual example.
 
 > [!IMPORTANT]
-> The `develop` and `v2` branches are in constant development so if you don't want the bleeding edge you should pin to the latest release, e.g.
+> The `develop` branch is in constant development while the `v2` branch is considered stable, if you don't want the bleeding edge you can pin to a specific release, e.g.
 > ```yaml
 >    uses: shaftoe/pi-coding-agent-action@v2.20.2
 > ```
+> If you need to pin to a specific Pi SDK version, just check out previous release tags and refer to the __Bundled Dependencies__ section of this README to find the correct version.
 
-> [!CAUTION]
+> [!WARNING]
 > **GitHub `GITHUB_TOKEN` cannot push changes to files under `.github/workflows/`.** This is a [GitHub security restriction](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication) — even when the workflow has `contents: write` permission, the automatic `GITHUB_TOKEN` is **never** allowed to create or modify workflow files. If you need Pi to create PRs that touch `.github/workflows/*.yml`, you must provide a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) with the `workflow` scope instead of the default `GITHUB_TOKEN`.
 
 > [!CAUTION]
