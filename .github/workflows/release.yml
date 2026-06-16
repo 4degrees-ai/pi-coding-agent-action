@@ -32,6 +32,9 @@ jobs:
           ref: v2
           fetch-depth: 0
 
+      - name: Ensure v2 branch is active
+        run: git checkout -B v2 origin/v2
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
