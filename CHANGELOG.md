@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.2] - 2026-06-16
+
+### Changed
+
+- **deps-dev**: update dependencies (#307)
+- **deps**: update dependencies (#309)
+- update readme and agents
+
+### Fixed
+
+- **deps**: correct root package.json dependency classification (#306)
+
 ## [2.20.1] - 2026-06-15
 
 ### Changed
@@ -473,7 +485,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.1...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.2...HEAD
+[2.20.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.1...v2.20.2
 [2.20.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.0...v2.20.1
 [2.19.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.2...v2.19.3
 [2.19.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.1...v2.19.2
