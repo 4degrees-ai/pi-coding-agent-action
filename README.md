@@ -30,6 +30,7 @@ Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 - **Issue assistance**: Prefix any new issue description and/or any issue comment with `/pi ` to have the agent analyze the issue, generate a report and/or create a new PR with the fix
 - **PR assistance**: Prefix any PR comment, review comment or review message with `/pi ` to have the agent review the pull request and/or to apply further changes
 - **Automated code reviews**: Have Pi review every new pull request automatically
+- **Recurring tasks**: Schedule Pi to run periodic maintenance tasks such as dependency audits, security scans, documentation updates, or code quality checks
 - **Add Pi to your own pipelines**: (Optionally) generate prompt from upstream actions/workflows and have Pi do the work in background for you anywhere you like in your workflows
 
 ## Goal
@@ -271,6 +272,95 @@ You can also call a `workflow_dispatch` from another workflow step, e.g. to auto
 
 > [!TIP]
 > Combine `pr_number` with other inputs like `thinking_level`, `loaded_tools`, or `extensions` to customize the review behavior. For example, use `loaded_tools` to restrict the agent to read-only tools when you only want feedback without automatic fixes.
+
+### Recurring Tasks
+
+You can use the `schedule` trigger to run the action periodically for automated maintenance tasks like dependency audits, security scans, documentation updates, or code quality checks.
+
+#### Example: weekly dependency audit
+
+```yaml
+name: Weekly Dependency Audit
+
+on:
+  schedule:
+    # Runs every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  # Allow manual trigger via the UI
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: shaftoe/pi-coding-agent-action@v2
+        id: pi
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: openai
+          model: gpt-5.4
+          token: ${{ secrets.OPENAI_API_KEY }}
+          prompt: |
+            Audit the project's dependencies for security vulnerabilities, outdated packages,
+            and deprecated APIs. Check package.json, bun.lockb, and any lock files.
+            If issues are found, create a pull request with updates and a summary of changes.
+            If no issues are found, post a comment on the most recent issue or PR indicating
+            the audit completed successfully with no findings.
+```
+
+#### Example: daily documentation sync
+
+```yaml
+name: Daily Documentation Sync
+
+on:
+  schedule:
+    # Runs daily at 6:00 AM UTC
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  docs-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: shaftoe/pi-coding-agent-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          provider: openai
+          model: gpt-5.4
+          token: ${{ secrets.OPENAI_API_KEY }}
+          prompt: |
+            Check if the documentation is up to date with the latest code changes.
+            Review README.md, any docs/ directory, and inline code comments.
+            If you find discrepancies, create a pull request with the necessary documentation updates.
+          branch_name_template: 'docs/{title}-{number}'
+```
+
+> [!TIP]
+> Use `workflow_dispatch` alongside `schedule` to allow manual runs for testing or ad-hoc execution. Combine with `export_session_html` and `export_session_jsonl` to archive periodic task results as workflow artifacts.
 
 ### Custom Extensions
 
