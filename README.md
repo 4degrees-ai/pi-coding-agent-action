@@ -67,6 +67,9 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 > ```
 > If you need to pin to a specific Pi SDK version, just check out previous release tags and refer to the __Bundled Dependencies__ section of this README to find the correct version.
 
+> [!NOTE]
+> **This action uses GitHub's immutable releases feature.** Once a release tag is published, it cannot be modified — the tag always points to the exact same commit SHA. This means pinning to a release tag (e.g., `@v2.20.3`) is functionally equivalent to pinning to a commit hash (e.g., `@abc123def456`) for security and reproducibility purposes. You get the stability of a fixed commit with the readability of semantic versioning. See [GitHub's official documentation](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/using-immutable-releases-and-tags-to-manage-your-actions-releases) for more details on immutable releases.
+
 > [!WARNING]
 > **GitHub `GITHUB_TOKEN` cannot push changes to files under `.github/workflows/`.** This is a [GitHub security restriction](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication) — even when the workflow has `contents: write` permission, the automatic `GITHUB_TOKEN` is **never** allowed to create or modify workflow files. If you need Pi to create PRs that touch `.github/workflows/*.yml`, you must provide a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) with the `workflow` scope instead of the default `GITHUB_TOKEN`.
 
