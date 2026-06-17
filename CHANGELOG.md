@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.3] - 2026-06-17
+
+### Changed
+
+- **deps**: update dependencies, Pi to v0.79.6 (#310)
+- update readme
+- update readme
+
 ## [2.20.2] - 2026-06-16
 
 ### Changed
@@ -485,7 +493,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.2...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.3...HEAD
+[2.20.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.2...v2.20.3
 [2.20.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.1...v2.20.2
 [2.20.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.0...v2.20.1
 [2.19.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.19.2...v2.19.3
