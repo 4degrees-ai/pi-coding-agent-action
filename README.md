@@ -96,7 +96,7 @@ Dependencies (including Pi itself) are [updated regularly](./.github/workflows/d
 | `@octokit/core` | `7.0.6` | Octokit REST API client core |
 | `@octokit/plugin-rest-endpoint-methods` | `17.0.0` | Octokit REST API endpoint methods |
 | `ignore` | `7.0.5` | `.gitignore`-style pattern matching |
-| `typebox` | `1.2.16` | JSON Schema Type Builder |
+| `typebox` | `1.2.17` | JSON Schema Type Builder |
 
 <!-- DEPS_TABLE_END -->
 
