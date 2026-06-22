@@ -33,25 +33,9 @@ Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 - **Recurring tasks**: Schedule Pi to run periodic maintenance tasks such as dependency audits, security scans, documentation updates, or code quality checks
 - **Add Pi to your own pipelines**: (Optionally) generate prompt from upstream actions/workflows and have Pi do the work in background for you anywhere you like in your workflows
 
-## Goal
+## Quick Start
 
-If all you want is running Pi inside a CI/CD environment technically you don't need any custom action, something like
-
-```yaml
-- uses: actions/setup-node@v6
-- run: npm -g install @earendil-works/pi-coding-agent
-- run: pi -p "do something useful for me"
-```
-
-might be just good enough and probably will always be the best fit for a pure "as minimalist as Pi" approach.
-
-On the other hand that's true for almost everything which is offered by the Actions ecosystem, useful and popular Actions are mostly focused on providing **a pleasant UX around the raw core functionality** they provide.
-
-This project goal is exactly that: to provide a short list of (opt-out) **opinionated default features** for interacting with and executing Pi agent sessions inside CI/CD environments compatible with GitHub API.
-
-For all the rest you're free and encouraged to just configure the action environment as you would your *local* Pi instance, e.g. adding files to `~/.pi/agent/`, environment variables, etc., and more generally to compose workflow pipelines around this action's inputs and outputs to fullfill your specific needs.
-
-Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn how to tweak Pi to best fit your needs.
+Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interactive](./.github/workflows/pi.yml) and [non-interactive](./.github/workflows/pr.yml) workflows in this repository to get started.
 
 ## Securing your workflows
 
@@ -617,7 +601,7 @@ Both are disabled by default. When enabled, their file paths are exposed via the
 
 ### Session Sharing (`/share` equivalent)
 
-`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a [pi.dev](https://pi.dev/session/) viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners. Set the `PI_SHARE_VIEWER_URL` environment variable to point at a self-hosted viewer instead of pi.dev (same env var the interactive `/share` command reads).
+`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a `pi.dev/session` viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners. Set the `PI_SHARE_VIEWER_URL` environment variable to point at a self-hosted viewer (same env var the interactive `/share` command reads).
 
 The link is surfaced in three places: the job log footer, a GitHub **notice** annotation, and the **job summary** (`$GITHUB_STEP_SUMMARY`). It is also exposed as the `share_url`, `gist_url`, and `gist_id` outputs for downstream steps.
 
@@ -664,10 +648,6 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
     token: ${{ secrets.OPENAI_API_KEY }}
     auto_compaction: true
 ```
-
-## Quick Start
-
-Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interactive](./.github/workflows/pi.yml) and [non-interactive](./.github/workflows/pr.yml) workflows in this repository to get started.
 
 ## Inputs
 
@@ -734,6 +714,26 @@ The action extends Pi with the following built-in GitHub tools:
 > [!TIP]
 > Set `load_builtin_extensions` input to `false` to disable custom tool auto loading.
 
+## Goal
+
+If all you want is running Pi inside a CI/CD environment technically you don't need any custom action, something like
+
+```yaml
+- uses: actions/setup-node@v6
+- run: npm -g install @earendil-works/pi-coding-agent
+- run: pi -p "do something useful for me"
+```
+
+might be just good enough and probably will always be the best fit for a pure "as minimalist as Pi" approach.
+
+On the other hand that's true for almost everything which is offered by the Actions ecosystem, useful and popular Actions are mostly focused on providing **a pleasant UX around the raw core functionality** they provide.
+
+This project goal is exactly that: to provide a short list of (opt-out) **opinionated default features** for interacting with and executing Pi agent sessions inside CI/CD environments compatible with GitHub API.
+
+For all the rest you're free and encouraged to just configure the action environment as you would your *local* Pi instance, e.g. adding files to `~/.pi/agent/`, environment variables, etc., and more generally to compose workflow pipelines around this action's inputs and outputs to fullfill your specific needs.
+
+Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn how to tweak Pi to best fit your needs.
+
 ## Development
 
 ### Prerequisites
@@ -794,7 +794,7 @@ The project uses a `develop` → `v2` branching strategy with **fast-forward pro
 
 The recommended path is the **Promote develop to v2** workflow (no PAT required, no double-runs):
 
-1. **Actions → "Promote develop to v2" → Run workflow.** It fast-forwards `v2` to `develop@HEAD`, pushes `v2`, then calls `release.yml` as a reusable workflow to run the e2e gate + `semantic-release` + merge-back to `develop`.
+1. **Actions → "Promote develop to v2" → Run workflow.** It fast-forwards `v2` to `develop@HEAD`, pushes `v2`, then calls `release.yml` as a reusable workflow to run the e2e gate + `semantic-release` + merge-back to `develop`. Needs to be run from the `v2` branch.
 2. Optionally run it with **dry-run** first to confirm the fast-forward is clean (it fails loudly if `v2` has diverged from `develop`).
 
 > [!NOTE]
