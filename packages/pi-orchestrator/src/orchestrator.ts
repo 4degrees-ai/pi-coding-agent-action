@@ -23,6 +23,7 @@ import {
   type PiConfig,
   type SessionStats,
 } from './types';
+import { formatCost } from './format';
 import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion, formatActionVersion } from './version';
 
@@ -79,6 +80,9 @@ export class ActionOrchestrator {
     const startTime = this.git.getStartTime() ?? Temporal.Now.instant();
     let reaction: CreateReactionType | undefined;
     let prompt: string | undefined;
+    // Hoisted so the catch block can recover partial usage from a run that
+    // threw after consuming tokens. Stays `undefined` until the factory runs.
+    let pi: PiAgent | undefined;
 
     try {
       prompt = await this.git.getPrompt(this.config.promptInput);
@@ -88,7 +92,7 @@ export class ActionOrchestrator {
 
       reaction = await this.addReactionBestEffort();
 
-      const pi = this.piAgentFactory(this.config, this.logger, this.platformProvider);
+      pi = this.piAgentFactory(this.config, this.logger, this.platformProvider);
       const { result, sessionStats, error } = await pi.run(prompt);
 
       await this.runSessionExports(pi);
@@ -102,7 +106,7 @@ export class ActionOrchestrator {
       const finalBody = buildSessionSuccessBody(result);
       await this.finalize(finalBody, this.config, startTime, reaction, sessionStats, true);
     } catch (e) {
-      await this.handleUncaughtError(e, startTime, reaction);
+      await this.handleUncaughtError(e, startTime, reaction, pi);
       throw e;
     }
   }
@@ -163,17 +167,35 @@ export class ActionOrchestrator {
    * Handle an uncaught error: post the error message as a comment
    * (best-effort), mark the action as failed. The caller still re-throws
    * the original error after this returns.
+   *
+   * When a `PiAgent` is available (i.e. the failure happened during or after
+   * `pi.run()`), partial session usage is recovered so token consumption
+   * from a run that threw mid-turn isn't silently lost. The recovered stats
+   * flow through {@link finalize}, surfacing in the action outputs, logs, and
+   * comment footer just like a successful run.
    */
   // fallow-ignore-next-line complexity
   private async handleUncaughtError(
     e: unknown,
     startTime: Temporal.Instant,
-    reaction: CreateReactionType | undefined
+    reaction: CreateReactionType | undefined,
+    pi?: PiAgent
   ): Promise<void> {
     const errorMessage = e instanceof Error ? e.message : String(e);
 
+    // Attempt to recover partial session usage even when prompt() rejected,
+    // so token consumption from a failed run isn't silently lost.
+    let sessionStats: SessionStats | undefined;
+    if (pi) {
+      try {
+        sessionStats = pi.getSessionStats();
+      } catch {
+        // Stats unavailable — continue without them.
+      }
+    }
+
     try {
-      await this.finalize(errorMessage, this.config, startTime, reaction, undefined, false);
+      await this.finalize(errorMessage, this.config, startTime, reaction, sessionStats, false);
     } catch (finalizeError) {
       const finalizeErrorMessage =
         finalizeError instanceof Error ? finalizeError.message : String(finalizeError);
@@ -193,6 +215,28 @@ export class ActionOrchestrator {
     this.logger.info(bar);
     this.logger.info(message);
     this.logger.info(bar);
+  }
+
+  /**
+   * Log a token-usage report to the action logs.
+   *
+   * The usage is also surfaced as action outputs and (when a comment is
+   * posted) in the comment footer. Logging it explicitly guarantees
+   * visibility for non-interactive runs where no comment is produced
+   * (e.g. agent creates/updates a PR via a tool and returns empty text,
+   * or there is no issue/PR context to comment on).
+   */
+  private logTokenUsageReport(sessionStats: SessionStats): void {
+    const parts: string[] = [
+      `input ${sessionStats.inputTokens.toLocaleString('en-US')}`,
+      `output ${sessionStats.outputTokens.toLocaleString('en-US')}`,
+      `total ${sessionStats.totalTokens.toLocaleString('en-US')}`,
+    ];
+    const cost = formatCost(sessionStats.cost, 4);
+    if (cost) {
+      parts.push(`cost $${cost}`);
+    }
+    this.logger.info(`📊 Token usage: ${parts.join(' · ')}`);
   }
 
   /**
@@ -248,6 +292,7 @@ export class ActionOrchestrator {
       this.outputSink.setOutput('input_tokens', sessionStats.inputTokens);
       this.outputSink.setOutput('output_tokens', sessionStats.outputTokens);
       this.outputSink.setOutput('cost', sessionStats.cost);
+      this.logTokenUsageReport(sessionStats);
     }
 
     const executionDuration = startTime.until(Temporal.Now.instant());
