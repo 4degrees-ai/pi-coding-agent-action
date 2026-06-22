@@ -48,6 +48,11 @@ export interface OutputSink {
   setFailed(error: Error): void;
   /** Resolve a temp directory for session exports of the given format. */
   getExportDirectory(format: 'html' | 'jsonl'): string;
+  /**
+   * Append markdown to the platform's job summary (e.g. GitHub Actions'
+   * `$GITHUB_STEP_SUMMARY`). Optional — no-op when not implemented.
+   */
+  appendSummary?(markdown: string): void | Promise<void>;
 }
 
 /**
@@ -220,6 +225,24 @@ export interface PiConfig extends DiffConfig {
   exportSessionHtml?: boolean;
   exportSessionJsonl?: boolean;
   autoCompaction?: boolean;
+  /**
+   * Share the session like pi's `/share` command: upload the exported
+   * HTML to a secret GitHub Gist and surface a pi.dev-style viewer link.
+   *
+   * Uses {@link githubToken} to create the gist. The default Actions
+   * `GITHUB_TOKEN` cannot create gists, so `github_token` must be a
+   * classic PAT (`gist` scope), fine-grained PAT (Account → Gists:
+   * read/write), or GitHub App token when this is enabled. When enabled,
+   * {@link exportSessionHtml} is auto-enabled since the gist carries the
+   * HTML export's bytes.
+   */
+  shareSession?: boolean;
+  /**
+   * GitHub API token (the `github_token` action input). Used for all
+   * GitHub REST API operations, including gist creation when
+   * {@link shareSession} is enabled.
+   */
+  githubToken?: string;
   /** Override the default system prompt. */
   systemPrompt?: string;
   /** Working directory. Defaults to `process.cwd()`. */

@@ -26,6 +26,7 @@ import {
 import { formatCost } from './format';
 import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion, formatActionVersion } from './version';
+import { createSessionGist, MAX_GIST_CONTENT_BYTES, type CreatedGist } from './share/gist';
 
 /**
  * Build the body of the success comment posted at the end of a run.
@@ -96,6 +97,7 @@ export class ActionOrchestrator {
       const { result, sessionStats, error } = await pi.run(prompt);
 
       await this.runSessionExports(pi);
+      await this.runSessionShare();
 
       if (error) {
         await this.handleSessionError(error, result, startTime, reaction, sessionStats);
@@ -132,7 +134,11 @@ export class ActionOrchestrator {
    */
   private async runSessionExports(pi: PiAgent): Promise<void> {
     const exportPromises: Promise<void>[] = [];
-    if (this.config.exportSessionHtml) {
+    // Sharing rides on the HTML export (the gist carries its bytes), so
+    // share_session implicitly enables it regardless of export_session_html.
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional ||: boolean flags, must fall through false
+    const exportHtml = this.config.exportSessionHtml || this.config.shareSession;
+    if (exportHtml) {
       exportPromises.push(this.exportSessionOutput(pi, 'html'));
     } else {
       this.logger.debug('[session-html] export disabled by configuration');
@@ -240,6 +246,151 @@ export class ActionOrchestrator {
   }
 
   /**
+   * Share the session as a secret GitHub Gist (pi `/share` equivalent).
+   *
+   * Uploads the exported session HTML to a gist and surfaces the viewer
+   * link in three places: the logs footer (`info`), a GitHub notice
+   * annotation (`notice`), and the job summary (`appendSummary`). Also
+   * exposes `share_url` / `gist_url` / `gist_id` as action outputs.
+   *
+   * Runs only when {@link PiConfig.shareSession} is enabled. Reads the
+   * HTML file produced by {@link exportSessionOutput}; if the export was
+   * disabled or failed (file missing), the content is too large, or the
+   * configured `github_token` lacks gist scope (API call fails), the
+   * share is skipped with a notice — it never fails the run.
+   */
+  private async runSessionShare(): Promise<void> {
+    if (!this.config.shareSession) {
+      this.logger.debug('[session-share] sharing disabled by configuration');
+      return;
+    }
+
+    const tag = 'session-share';
+    const token = this.config.githubToken;
+    if (!token) {
+      this.logger.notice(
+        `[${tag}] skipped: no github_token configured (provide a PAT/App token with gist scope via github_token)`
+      );
+      return;
+    }
+
+    // Reuse the same path exportSessionOutput writes (single source of truth
+    // for the filename convention — avoids drifting out of sync).
+    const htmlPath = this.sessionExportPath('html');
+    const content = this.readShareContent(htmlPath, tag);
+    if (content === undefined) {
+      return; // skip notice already logged in readShareContent
+    }
+
+    await this.createAndSurfaceGist(token, content, tag);
+  }
+
+  /**
+   * Read the session HTML file for sharing.
+   *
+   * Returns the content string, or `undefined` when the file is missing,
+   * unreadable, or exceeds {@link MAX_GIST_CONTENT_BYTES} (a skip notice is
+   * logged in each case).
+   */
+  private readShareContent(htmlPath: string, tag: string): string | undefined {
+    if (!fs.existsSync(htmlPath)) {
+      this.logger.notice(`[${tag}] skipped: session HTML export not found at ${htmlPath}`);
+      return undefined;
+    }
+
+    try {
+      // Pre-check the on-disk size before loading the file into memory so a
+      // pathological oversized file is rejected without being read.
+      const statBytes = fs.statSync(htmlPath).size;
+      if (statBytes > MAX_GIST_CONTENT_BYTES) {
+        this.logger.notice(
+          `[${tag}] skipped: session HTML is ${statBytes} bytes, exceeds ` +
+            `${MAX_GIST_CONTENT_BYTES}-byte gist limit`
+        );
+        return undefined;
+      }
+      const content = fs.readFileSync(htmlPath, 'utf8');
+      const contentBytes = Buffer.byteLength(content, 'utf8');
+      if (contentBytes > MAX_GIST_CONTENT_BYTES) {
+        this.logger.notice(
+          `[${tag}] skipped: session HTML is ${contentBytes} bytes, exceeds ` +
+            `${MAX_GIST_CONTENT_BYTES}-byte gist limit`
+        );
+        return undefined;
+      }
+      return content;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.notice(`[${tag}] skipped: failed to read session HTML: ${msg}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Create the gist, surface the viewer link, and set action outputs.
+   *
+   * Gist creation failures are caught and logged as a notice (the run
+   * continues). The job-summary write is wrapped separately so a summary
+   * failure doesn't produce a misleading "failed to share session" message
+   * — by that point the gist exists and the outputs are already set.
+   */
+  private async createAndSurfaceGist(token: string, content: string, tag: string): Promise<void> {
+    const description = this.buildShareDescription();
+
+    let gist: CreatedGist;
+    try {
+      gist = await createSessionGist({ token, content, description });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.notice(`[${tag}] failed to share session: ${msg}`);
+      return;
+    }
+
+    this.logger.info(`[${tag}] shared session as gist ${gist.id}: ${gist.gistUrl}`);
+    this.logger.info(`[${tag}] view session: ${gist.shareUrl}`);
+    this.logger.notice(`Session shared: ${gist.shareUrl}`);
+    this.outputSink.setOutput('share_url', gist.shareUrl);
+    this.outputSink.setOutput('gist_url', gist.gistUrl);
+    this.outputSink.setOutput('gist_id', gist.id);
+
+    // Summary write is non-critical — sharing already succeeded (gist exists,
+    // outputs are set). Wrap separately so a summary failure doesn't log a
+    // misleading "failed to share session" notice.
+    try {
+      await this.outputSink.appendSummary?.(`🔗 **Session:** ${gist.shareUrl}\n`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.debug(`[${tag}] job summary write skipped: ${msg}`);
+    }
+  }
+
+  /**
+   * Build a gist description enriched with repo/issue/run context for
+   * auditability (gists accumulate indefinitely on the bot account).
+   * Falls back to a generic label when context is unavailable.
+   */
+  private buildShareDescription(): string {
+    try {
+      const ctx = this.platformProvider.getContext();
+      const repoPart = `${ctx.repo.owner}/${ctx.repo.repo}#${ctx.issue.number}`;
+      const runPart = ctx.runId ? ` (run ${ctx.runId})` : '';
+      return `Pi session — ${repoPart}${runPart}`;
+    } catch {
+      return 'Pi agent session';
+    }
+  }
+
+  /**
+   * Resolve the on-disk path a session export is written to for the given
+   * format. Single source of truth for the `session.<format>` naming
+   * convention shared by {@link exportSessionOutput} (writes the file) and
+   * {@link runSessionShare} (reads it back to upload).
+   */
+  private sessionExportPath(format: 'html' | 'jsonl'): string {
+    return path.join(this.outputSink.getExportDirectory(format), `session.${format}`);
+  }
+
+  /**
    * Export session output for a given format (HTML or JSONL).
    *
    * Shared implementation for session exports: creates the export directory
@@ -249,11 +400,10 @@ export class ActionOrchestrator {
   private async exportSessionOutput(pi: PiAgent, format: 'html' | 'jsonl'): Promise<void> {
     const tag = `session-${format}`;
     const formatLabel = format.toUpperCase();
-    const outputDir = this.outputSink.getExportDirectory(format);
-    const outputPath = path.join(outputDir, `session.${format}`);
+    const outputPath = this.sessionExportPath(format);
 
     try {
-      fs.mkdirSync(outputDir, { recursive: true });
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
       const exportFn = format === 'html' ? pi.exportSessionHtml : pi.exportSessionJsonl;
       await exportFn.call(pi, outputPath);
       this.logger.info(`[${tag}] exported session ${formatLabel} to ${outputPath}`);

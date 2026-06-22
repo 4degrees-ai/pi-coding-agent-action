@@ -167,11 +167,20 @@ export function gatherActionsConfig(): PiConfig {
   const exportSessionHtml = parseBooleanInput(core.getInput('export_session_html'), true);
   const exportSessionJsonl = parseBooleanInput(core.getInput('export_session_jsonl'), false);
   const autoCompaction = parseBooleanInput(core.getInput('auto_compaction'), false);
+  const shareSession = parseBooleanInput(core.getInput('share_session'), false);
 
   // --- Optional positive-integer inputs ----------------------------------
   const diffMaxLines = parsePositiveIntInput(core.getInput('diff_max_lines'));
   const diffMaxBytes = parsePositiveIntInput(core.getInput('diff_max_bytes'));
   const prNumber = parsePositiveIntInput(core.getInput('pr_number'));
+
+  // --- Session sharing inputs --------------------------------------------
+  const githubToken = core.getInput('github_token') || undefined;
+  // Register the token for log masking — it may be a PAT/App token with
+  // elevated scopes (e.g. gist) that should never appear in clear text.
+  if (githubToken) {
+    core.setSecret(githubToken);
+  }
 
   // --- Assemble PiConfig (only include optional keys when set) -----------
   return {
@@ -187,6 +196,8 @@ export function gatherActionsConfig(): PiConfig {
     exportSessionHtml,
     exportSessionJsonl,
     autoCompaction,
+    shareSession,
+    ...(githubToken ? { githubToken } : {}),
     ...(diffMaxLines ? { diffMaxLines } : {}),
     ...(diffMaxBytes ? { diffMaxBytes } : {}),
     ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),

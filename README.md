@@ -615,6 +615,42 @@ Both are disabled by default. When enabled, their file paths are exposed via the
       ${{ steps.pi.outputs.session_jsonl_path }}
 ```
 
+### Session Sharing (`/share` equivalent)
+
+`share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a [pi.dev](https://pi.dev/session/) viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners. Set the `PI_SHARE_VIEWER_URL` environment variable to point at a self-hosted viewer instead of pi.dev (same env var the interactive `/share` command reads).
+
+The link is surfaced in three places: the job log footer, a GitHub **notice** annotation, and the **job summary** (`$GITHUB_STEP_SUMMARY`). It is also exposed as the `share_url`, `gist_url`, and `gist_id` outputs for downstream steps.
+
+Enabling `share_session` **auto-enables `export_session_html`** (the gist carries the HTML export's bytes), so you don't need to set both.
+
+> [!IMPORTANT]
+> **A GitHub token with `gist` scope is required.** The default `secrets.GITHUB_TOKEN` **cannot** create gists. Set the `github_token` input to a classic PAT (with the `gist` scope), a fine-grained PAT (Account → **Gists: read/write**), or a GitHub App installation token — the same token is used for all GitHub API operations.
+
+> [!WARNING]
+> Secret gists are **URL-obscured, not access-controlled** — anyone with the link can read the rendered session, which may include code, file contents, or secrets the agent touched. Only enable `share_session` for runs where that exposure is acceptable, and prefer a dedicated bot account so shared gists are easy to audit and delete.
+
+```yaml
+- uses: shaftoe/pi-coding-agent-action@v2
+  id: pi
+  with:
+    share_session: true
+    github_token: ${{ secrets.GH_PAT }}   # PAT w/ gist scope — NOT secrets.GITHUB_TOKEN
+    provider: openai
+    model: gpt-5.4
+    token: ${{ secrets.OPENAI_API_KEY }}
+
+- name: Echo share link
+  if: ${{ steps.pi.outputs.share_url }}
+  run: echo "Session: ${{ steps.pi.outputs.share_url }}"
+```
+
+> [!NOTE]
+> **Gist cleanup is your responsibility.** The action does not delete shared gists — they accumulate on the account that owns the `github_token`. This mirrors pi's own `/share` behaviour and is intentional (the links must stay valid for the viewer to work), but it means gists will pile up over time. To keep things tidy:
+> - Use a dedicated bot account for sharing so personal gists don't get cluttered.
+> - Each gist's description includes the repo, issue number, and run ID (`Pi session — owner/repo#123 (run 456)`) for easy identification in the gist list.
+> - Periodically prune old gists via the [GitHub Gist API](https://docs.github.com/en/rest/gists/gists#delete-a-gist) or the web UI. The `gist_id` action output is available for automation — e.g. a scheduled workflow could list and delete gists older than a threshold.
+> - The `gist_url` output points to each gist's page where it can be reviewed or deleted manually.
+
 ### Auto-Compaction
 
 For complex, multi-step tasks that generate a lot of context (e.g. large code reviews, multi-file refactors), the conversation may grow too large for the model's context window. Enable `auto_compaction` to have Pi automatically summarize older messages when the context fills up:
@@ -643,16 +679,17 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 | `diff_max_bytes` | Maximum diff size in bytes returned by the `get_pr_diff` tool | No | `102400` |
 | `diff_max_lines` | Maximum number of diff lines returned by the `get_pr_diff` tool | No | `1000` |
 | `auto_compaction` | Enable automatic context compaction when the conversation grows too large for the model's context window. Pi summarizes older messages to free up context space | No | `false` |
-| `export_session_html` | Export the session as a self-contained HTML file | No | `false` |
+| `export_session_html` | Export the session as a self-contained HTML file. Auto-enabled when `share_session` is true | No | `false` |
 | `export_session_jsonl` | Export the session as a JSONL file (one JSON object per line) for programmatic consumption | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
-| `github_token` | GitHub token for API access | Yes | - |
+| `github_token` | GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations; to use `share_session`, provide a PAT/App token with gist scope instead | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |
 | `loaded_tools` | Controls which tools are available in the session. Defaults to `all`. Accepts a list of tool names (one per line) to load — unknown names cause the run to fail early | No | `all` |
 | `model` | Model to use (e.g., gpt-5.4, gpt-4o, gemini-2.5-pro) | Yes | - |
 | `pr_number` | Pull request number to target. Use with `workflow_dispatch` to run the agent on a specific PR without a triggering event. When set, the action fetches PR context from the API and targets all operations at the specified PR | No | - |
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
+| `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a secret GitHub Gist and surface a pi.dev viewer link. Uses the `github_token` input (PAT/App token with gist scope required). Auto-enables `export_session_html` | No | `false` |
 | `thinking_level` | Model thinking level (off\|low\|medium\|high) | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi  |
@@ -667,11 +704,14 @@ The action exposes the following outputs, which can be consumed by downstream st
 |--------|-------------|----------|
 | `cost` | Cost of the invocation in USD (omitted if unavailable) | `0.042` |
 | `duration_seconds` | Wall-clock duration of agent execution in seconds | `12.7` |
+| `gist_id` | GitHub Gist ID holding the shared session HTML (when `share_session` succeeds) | `abc123def456` |
+| `gist_url` | GitHub Gist URL holding the shared session HTML (when `share_session` succeeds) | `https://gist.github.com/bot/abc123def456` |
 | `input_tokens` | Number of input tokens consumed (omitted if unavailable) | `1500` |
 | `output_tokens` | Number of output tokens generated (omitted if unavailable) | `800` |
 | `response` | The main agent response text (or error message on failure) | `Here is the fix for the bug...` |
-| `session_html_path` | Path to the exported session HTML file (when `export_session_html` is enabled) | `/tmp/pi-session-html/session.html` |
+| `session_html_path` | Path to the exported session HTML file (when `export_session_html` is enabled, or when `share_session` is enabled) | `/tmp/pi-session-html/session.html` |
 | `session_jsonl_path` | Path to the exported session JSONL file (when `export_session_jsonl` is enabled) | `/tmp/pi-session-jsonl/session.jsonl` |
+| `share_url` | pi.dev-style viewer link for the shared session (when `share_session` succeeds) | `https://pi.dev/session/#abc123def456` |
 | `success` | Whether the agent completed successfully (`true` / `false`) | `true` |
 
 > [!WARNING]

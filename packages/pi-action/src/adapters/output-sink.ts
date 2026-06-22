@@ -32,4 +32,20 @@ export class ActionsOutputSink implements OutputSink {
       `pi-session-${format}-${process.env.GITHUB_RUN_ID ?? 'local'}`
     );
   }
+
+  /**
+   * Append markdown to the GitHub Actions job summary (`$GITHUB_STEP_SUMMARY`).
+   *
+   * Uses `@actions/core`'s `summary` helper, which appends (rather than
+   * overwrites) so multiple calls compose.
+   *
+   * **Throws** outside a GitHub Actions runner: `summary.write()` rejects
+   * with `"Unable to find environment variable for $GITHUB_STEP_SUMMARY"`
+   * when the env var is unset. Callers must catch (e.g. the orchestrator
+   * wraps this in its own try/catch so a summary failure never surfaces as
+   * a sharing failure).
+   */
+  async appendSummary(markdown: string): Promise<void> {
+    await core.summary.addRaw(markdown).write();
+  }
 }

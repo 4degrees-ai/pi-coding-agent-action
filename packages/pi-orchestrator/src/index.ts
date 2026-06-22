@@ -54,6 +54,10 @@ export { updatePullRequestToolFactory } from './pi/tools/update-pr';
 export { getActionVersion, getPiVersion, formatActionVersion } from './version';
 export type { ActionBuildInfo } from './version';
 
+// Session sharing (gist)
+export { createSessionGist } from './share/gist';
+export type { CreateGistInput, CreatedGist } from './share/gist';
+
 // Types
 export type {
   Logger,

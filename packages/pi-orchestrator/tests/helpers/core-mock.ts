@@ -15,6 +15,15 @@
  *
  * The mock object is shared across all test files in the process — clear spies
  * in `beforeEach` via `coreMock.setOutput.mockClear()`.
+ *
+ * NOTE: Bun only hoists **direct** `mock.module()` calls before import
+ * resolution.  Calls wrapped inside another function (like
+ * `registerCoreMock()`) are NOT hoisted, so any module that imports
+ * `@actions/core` at load time will receive the real module if the mock
+ * hasn't been registered yet.  Test files that need per-test `getInput`
+ * overrides should call `mock.module()` directly instead of relying on this
+ * helper — see `packages/pi-action/tests/adapters/config.spec.ts` for the
+ * pattern.
  */
 import { mock } from 'bun:test';
 
@@ -32,6 +41,13 @@ export const coreMock = {
   setSecret: mock(),
   addPath: mock(),
   setCommandEcho: mock(),
+  summary: {
+    // addRaw returns `this` so `core.summary.addRaw(md).write()` chains
+    addRaw: mock(function (this: unknown) {
+      return this;
+    }),
+    write: mock(async () => {}),
+  },
 };
 
 let registered = false;
