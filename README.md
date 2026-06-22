@@ -63,7 +63,7 @@ Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn ho
 > [!IMPORTANT]
 > The `develop` branch is in constant development while the `v2` branch is considered stable, if you don't want the bleeding edge you can pin to a specific release, e.g.
 > ```yaml
->    uses: shaftoe/pi-coding-agent-action@v2.20.4
+>    uses: shaftoe/pi-coding-agent-action@v2.21.0
 > ```
 > If you need to pin to a specific Pi SDK version, just check out previous release tags and refer to the __Bundled Dependencies__ section of this README to find the correct version.
 

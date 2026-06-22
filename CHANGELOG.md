@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-06-22
+
+### Added
+
+- **pi-action-bridge**: add Pi TUI extension bridging local sessions and CI agent (#311)
+- add token usage report to action logs (#322)
+- **orchestrator**: surface context-compaction events with overflow-retry signal (#324)
+
+### Changed
+
+- **deps**: bump actions/checkout from 6 to 7 (#316)
+- **deps**: update dependencies (#315)
+- **deps**: update dependencies (#318)
+- **deps**: update dependencies (#319)
+- **deps**: update dependencies, Pi to v0.79.10 (#320)
+- **deps**: update dependencies, Pi to v0.79.8 (#314)
+
 ## [2.20.4] - 2026-06-19
 
 ### Changed
@@ -501,7 +518,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.4...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.21.0...HEAD
+[2.21.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.4...v2.21.0
 [2.20.4]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.3...v2.20.4
 [2.20.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.2...v2.20.3
 [2.20.2]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.1...v2.20.2

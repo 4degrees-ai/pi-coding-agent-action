@@ -1,6 +1,6 @@
 {
   "name": "pi-coding-agent-action",
-  "version": "2.20.4",
+  "version": "2.21.0",
   "private": true,
   "description": "CI/CD Action to integrate Pi coding agent in workflows",
   "workspaces": [
