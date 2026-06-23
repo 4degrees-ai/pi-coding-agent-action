@@ -19,5 +19,5 @@ jobs:
     with:
       allowed_actor: shaftoe
     secrets:
-      gh_token: ${{ secrets.GITHUB_TOKEN }}
+      gh_token: ${{ secrets.GH_PAT }} # Has Gists write access
       token: ${{ secrets.API_KEY }}
