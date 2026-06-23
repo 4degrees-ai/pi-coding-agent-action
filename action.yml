@@ -22,7 +22,7 @@ inputs:
     required: false
 
   thinking_level:
-    description: 'Thinking level (e.g. off, low, medium, high)'
+    description: 'Thinking level (e.g. off, low, medium, high, etc.)'
     required: false
     default: 'off'
 

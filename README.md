@@ -44,16 +44,6 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 > Depending on the permissions assigned to your workflow you should consider restricting who's allowed to trigger it e.g. filtering for GitHub user name or role (`if github.actor == '<my-user>'`).
 > You should also consider disabling automated PRs reviews for forks (`if: github.event.pull_request.head.repo.fork == false`), see [Review PR](.github/workflows/pr.yml) workflow for an actual example.
 
-> [!IMPORTANT]
-> The `develop` branch is in constant development while the `v2` branch is considered stable, if you don't want the bleeding edge you can pin to a specific release, e.g.
-> ```yaml
->    uses: shaftoe/pi-coding-agent-action@v2.21.0
-> ```
-> If you need to pin to a specific Pi SDK version, just check out previous release tags and refer to the __Bundled Dependencies__ section of this README to find the correct version.
-
-> [!NOTE]
-> **This action uses GitHub's immutable releases feature.** Once a release tag is published, it cannot be modified — the tag always points to the exact same commit SHA. This means pinning to a release tag (e.g., `@v2.20.3`) is functionally equivalent to pinning to a commit hash (e.g., `@abc123def456`) for security and reproducibility purposes. You get the stability of a fixed commit with the readability of semantic versioning. See [GitHub's official documentation](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/using-immutable-releases-and-tags-to-manage-your-actions-releases) for more details on immutable releases.
-
 > [!WARNING]
 > **GitHub `GITHUB_TOKEN` cannot push changes to files under `.github/workflows/`.** This is a [GitHub security restriction](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication) — even when the workflow has `contents: write` permission, the automatic `GITHUB_TOKEN` is **never** allowed to create or modify workflow files. If you need Pi to create PRs that touch `.github/workflows/*.yml`, you must provide a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) with the `workflow` scope instead of the default `GITHUB_TOKEN`.
 
@@ -61,11 +51,22 @@ Create a workflow file, e.g., `.github/workflows/pi-agent.yml`. See the [interac
 > **Project trust is automatically enabled.** The Pi SDK (v0.79.0+) uses a [project trust system](https://pi.dev/docs/latest/security#project-trust) to decide whether to load project-level resources such as `AGENTS.md`, `.pi` settings, project extensions, and skills. In a CI environment there is no interactive user to approve trust, so this action **always marks the workspace as trusted** (`projectTrusted: true`) when creating the agent session. This means any `AGENTS.md`, `.pi/` configuration, or project extensions present in the repository checkout will be loaded and followed by the agent. Keep this in mind when deciding what to commit to your repository — anyone with push access can influence agent behavior through these files.
 > See [the official Pi documentation](https://pi.dev/docs/latest/security#project-trust) for more information on project trust.
 
-## Bundled Dependencies
+## Versions and Bundled Dependencies
+
+The `develop` branch is in constant development while the `v2` branch is considered stable, if you don't want the bleeding edge you can pin to a specific release, e.g.
+
+```yaml
+   uses: shaftoe/pi-coding-agent-action@v2.21.0
+```
+
+> [!NOTE]
+> **This action uses GitHub's immutable releases feature.** Once a release tag is published, it cannot be modified — the tag always points to the exact same commit SHA. This means pinning to a release tag (e.g., `@v2.20.3`) is functionally equivalent to pinning to a commit hash (e.g., `@abc123def456`) for security and reproducibility purposes. You get the stability of a fixed commit with the readability of semantic versioning. See [GitHub's official documentation](https://docs.github.com/en/actions/how-tos/create-and-publish-actions/using-immutable-releases-and-tags-to-manage-your-actions-releases) for more details on immutable releases.
 
 The action is bundled into a single `dist/index.js` via [esbuild](https://esbuild.github.io/) so no `node_modules` are needed at runtime. Non-code Pi SDK assets (HTML templates, theme JSON) are copied to `dist/pi-sdk/` and resolved via the `PI_PACKAGE_DIR` environment variable.
 
 Dependencies (including Pi itself) are [updated regularly](./.github/workflows/daily-deps-update.yml) to keep up with new releases.
+
+If you need to pin to a specific Pi SDK version check out previous release tags and refer to the following table to find the correct version:
 
 <!-- DEPS_TABLE_START -->
 
@@ -88,11 +89,6 @@ Dependencies (including Pi itself) are [updated regularly](./.github/workflows/d
 
 > [!NOTE]
 > If you don't want to use latest and greatest dependencies, pin the action to a specific release, e.g. `uses: shaftoe/pi-coding-agent-action@v2.0.0`
-
-## Disclaimer
-
-> [!NOTE]
-> Codeberg/Forgejo compatibility _should_ work but hasn't been tested yet.
 
 ## Usage
 
@@ -653,12 +649,12 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
+| `auto_compaction` | Enable automatic context compaction when the conversation grows too large for the model's context window. Pi summarizes older messages to free up context space | No | `false` |
 | `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
 | `branch_name_template` | Template for auto-generated branch names in `create_pull_request`. Supports variables: `{number}` (issue/PR number), `{timestamp}` (epoch ms), `{title}` (slugified PR title). Default: `pi/issue{number}-{timestamp}` | No | - |
 | `diff_ignore_patterns` | Space-separated list of file patterns to exclude from PR diffs by default (e.g. `dist/ package-lock.json`). The agent can still provide additional patterns at call time | No | - |
 | `diff_max_bytes` | Maximum diff size in bytes returned by the `get_pr_diff` tool | No | `102400` |
 | `diff_max_lines` | Maximum number of diff lines returned by the `get_pr_diff` tool | No | `1000` |
-| `auto_compaction` | Enable automatic context compaction when the conversation grows too large for the model's context window. Pi summarizes older messages to free up context space | No | `false` |
 | `export_session_html` | Export the session as a self-contained HTML file. Auto-enabled when `share_session` is true | No | `false` |
 | `export_session_jsonl` | Export the session as a JSONL file (one JSON object per line) for programmatic consumption | No | `false` |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
@@ -670,7 +666,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `prompt` | Optional prompt to send to the agent (skips comment extraction) | No | - |
 | `provider` | LLM provider (openai, google, anthropic, etc.) | Yes | - |
 | `share_session` | Share the session like pi's `/share` command: upload the exported HTML to a secret GitHub Gist and surface a pi.dev viewer link. Uses the `github_token` input (PAT/App token with gist scope required). Auto-enables `export_session_html` | No | `false` |
-| `thinking_level` | Model thinking level (off\|low\|medium\|high) | No | off |
+| `thinking_level` | Model thinking level | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi  |
 
@@ -733,6 +729,11 @@ This project goal is exactly that: to provide a short list of (opt-out) **opinio
 For all the rest you're free and encouraged to just configure the action environment as you would your *local* Pi instance, e.g. adding files to `~/.pi/agent/`, environment variables, etc., and more generally to compose workflow pipelines around this action's inputs and outputs to fullfill your specific needs.
 
 Refer to [the official Pi documentation](https://pi.dev/docs/latest) to learn how to tweak Pi to best fit your needs.
+
+## Disclaimer
+
+> [!NOTE]
+> Codeberg/Forgejo compatibility _should_ work but hasn't been tested yet.
 
 ## Development
 
