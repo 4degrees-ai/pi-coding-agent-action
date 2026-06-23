@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.22.0] - 2026-06-23
+
+### Added
+
+- add share_session input to share sessions via GitHub Gist (#326)
+
+### Changed
+
+- update readme [skip ci]
+- update readme [skip ci]
+
 ## [2.21.0] - 2026-06-22
 
 ### Added
@@ -518,7 +529,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.21.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.22.0...HEAD
+[2.22.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.21.0...v2.22.0
 [2.21.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.4...v2.21.0
 [2.20.4]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.3...v2.20.4
 [2.20.3]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.2...v2.20.3
