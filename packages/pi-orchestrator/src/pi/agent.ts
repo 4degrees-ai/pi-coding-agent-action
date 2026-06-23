@@ -25,6 +25,7 @@ import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type {
+  PiAgent,
   PromptResult,
   SessionStats,
   Logger,
@@ -383,4 +384,31 @@ export class Agent {
       return undefined;
     }
   }
+}
+
+/**
+ * Wrap an {@link Agent} instance in the simplified {@link PiAgent} adapter
+ * interface expected by the orchestrator.
+ *
+ * {@link PiAgent#run} is a convenience that calls {@link Agent#ready} (idempotent)
+ * before {@link Agent#run}. All frontends (GitHub Action, CLI, …) build their
+ * `Agent` with platform-specific {@link AgentEvents} routing and then delegate
+ * through this wrapper, so the adapter object is shared instead of duplicated.
+ */
+export function wrapAgent(agent: Agent): PiAgent {
+  return {
+    async run(text: string) {
+      await agent.ready();
+      return agent.run(text);
+    },
+    getSessionStats() {
+      return agent.getSessionStats();
+    },
+    async exportSessionHtml(outputPath: string) {
+      return agent.exportSessionHtml(outputPath);
+    },
+    async exportSessionJsonl(outputPath: string) {
+      return agent.exportSessionJsonl(outputPath);
+    },
+  };
 }

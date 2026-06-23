@@ -21,9 +21,9 @@ import type {
   PiConfig,
   Logger,
   AgentEvents,
+  PlatformProvider,
 } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
-import { Agent } from '@alexanderfortin/pi-orchestrator';
+import { Agent, wrapAgent } from '@alexanderfortin/pi-orchestrator';
 
 /**
  * Factory function that creates a PiAgent wrapping a real Pi Agent instance.
@@ -42,19 +42,5 @@ export const createRealPiAgent: PiAgentFactory = (
   };
   const agent = new Agent(logger, provider, config, events);
 
-  return {
-    async run(text: string) {
-      await agent.ready();
-      return agent.run(text);
-    },
-    getSessionStats() {
-      return agent.getSessionStats();
-    },
-    async exportSessionHtml(outputPath: string) {
-      return agent.exportSessionHtml(outputPath);
-    },
-    async exportSessionJsonl(outputPath: string) {
-      return agent.exportSessionJsonl(outputPath);
-    },
-  };
+  return wrapAgent(agent);
 };

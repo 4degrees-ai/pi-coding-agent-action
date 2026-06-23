@@ -11,7 +11,7 @@ export { ActionOrchestrator, buildSessionSuccessBody, buildSessionErrorBody } fr
 export { formatCost } from './format';
 
 // Agent
-export { Agent } from './pi';
+export { Agent, wrapAgent } from './pi';
 export { createToolsFactory } from './pi/tools';
 export { createCancellationResult, withCancellation, buildParams } from './pi/tools/tool-execution';
 export type { CancellationResult, ToolExecutionConfig } from './pi/tools/tool-execution';
@@ -45,7 +45,7 @@ export { resolveExtensions, getResourceLoader } from './pi/resource-loader';
 export { createPRToolFactory } from './pi/tools/create-pr';
 export { createReviewToolFactory } from './pi/tools/create-review';
 export { getCIStatusToolFactory } from './pi/tools/get-ci-status';
-export { getPRDiffToolFactory } from './pi/tools/get-pr-diff';
+export { getPRDiffToolFactory, executeGetPRDiff } from './pi/tools/get-pr-diff';
 export { getIssueOrPRThreadToolFactory } from './pi/tools/get-thread';
 export { getWorkflowRunLogsToolFactory } from './pi/tools/get-workflow-run-logs';
 export { updatePullRequestToolFactory } from './pi/tools/update-pr';

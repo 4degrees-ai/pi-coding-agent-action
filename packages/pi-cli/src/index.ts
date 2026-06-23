@@ -16,6 +16,26 @@ import * as path from 'node:path';
 import { runCommand, type RunCommandArgs } from './commands/run.js';
 
 /**
+ * Decide the process exit code for a commander `exitOverride` signal.
+ *
+ * Non-fatal codes (`commander.help`, `commander.helpDisplayed`,
+ * `commander.version`) indicate the user asked for help/version and must
+ * not be treated as failure. Everything else surfaces commander's exitCode
+ * (defaulting to 1) so real errors are visible. Commander still writes its
+ * own message before invoking the override.
+ */
+function handleCommanderExit(err: CommanderError): void {
+  const isHelpOrVersion =
+    err.code === 'commander.help' ||
+    err.code === 'commander.helpDisplayed' ||
+    err.code === 'commander.version';
+  process.exitCode = isHelpOrVersion ? 0 : (err.exitCode ?? 1);
+}
+
+// Exported for unit tests (pi-cli is a private package).
+export { handleCommanderExit };
+
+/**
  * Build the commander program. Exported so tests can introspect the CLI
  * shape without invoking handlers.
  */
@@ -31,20 +51,7 @@ export function buildProgram(): Command {
     // Commander's default is to call process.exit on --help / errors.
     // We override exitOutput so tests can run the program without the
     // process dying mid-test; in production, the exitCode is set instead.
-    .exitOverride((err: CommanderError) => {
-      // CommanderError codes: 'commander.help', 'commander.version',
-      // 'commander.helpDisplayed' are non-fatal (user asked for help).
-      // Errors have exitCode > 0 and we let commander write the message.
-      if (err.code === 'commander.help' || err.code === 'commander.helpDisplayed') {
-        process.exitCode = 0;
-        return;
-      }
-      if (err.code === 'commander.version') {
-        process.exitCode = 0;
-        return;
-      }
-      process.exitCode = err.exitCode ?? 1;
-    });
+    .exitOverride(handleCommanderExit);
 
   program
     .command('run <prompt>')

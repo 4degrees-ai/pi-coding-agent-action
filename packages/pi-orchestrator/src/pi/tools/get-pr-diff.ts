@@ -216,6 +216,79 @@ export function resolvePRParams(
 }
 
 // ---------------------------------------------------------------------------
+// Result construction + execution (extracted for testability)
+// ---------------------------------------------------------------------------
+
+/** Result returned by the get_pr_diff tool handler. */
+interface GetPRDiffResult {
+  content: { type: 'text'; text: string }[];
+  details: GetPRDiffDetails;
+}
+
+/**
+ * Build a uniform tool result: a single text content block paired with
+ * details. Collapses the three identical `{ content, details }` shapes the
+ * handler emits across its resolve / no-diff / success branches.
+ */
+function diffToolResult(text: string, details: GetPRDiffDetails): GetPRDiffResult {
+  return { content: [{ type: 'text', text }], details };
+}
+
+/**
+ * Run the get_pr_diff handler logic: resolve → fetch → truncate → render.
+ *
+ * Extracted from {@link getPRDiffToolFactory} so the flow is a named,
+ * directly-testable function (mirroring the file's other exported helpers).
+ * The factory now only wires the tool definition and delegates here.
+ *
+ * @returns A text-content result; never throws for normal outcomes (missing
+ *          params, empty diff) — only provider/network errors propagate.
+ */
+export async function executeGetPRDiff(
+  params: GetPRDiffToolParams,
+  provider: PlatformProvider,
+  config?: DiffConfig
+): Promise<GetPRDiffResult> {
+  const resolved = resolvePRParams(params, provider);
+
+  if (!resolved) {
+    return diffToolResult(
+      'Could not resolve PR: owner, repo, or pull_number missing and no PR context available.',
+      { pull_number: 0, lines: 0, truncated: false }
+    );
+  }
+
+  const { owner, repo, pullNumber } = resolved;
+
+  const ignoreFiles = mergeIgnoreFiles(config?.diffIgnorePatterns ?? [], params.ignore_files ?? []);
+
+  const diff = await provider.getPRDiff(owner, repo, pullNumber, ignoreFiles);
+
+  if (!diff) {
+    return diffToolResult(
+      `No diff available for PR #${pullNumber}. This may not be a pull request, or the diff is empty.`,
+      { pull_number: pullNumber, lines: 0, truncated: false }
+    );
+  }
+
+  const maxLines = params.max_lines ?? config?.diffMaxLines ?? 1000;
+  const maxBytes = config?.diffMaxBytes ?? 102_400;
+  const truncated = truncateDiff(diff, maxLines, maxBytes);
+
+  const details: GetPRDiffDetails = {
+    pull_number: pullNumber,
+    lines: truncated.text.split('\n').length,
+    truncated: truncated.truncated,
+    ...(truncated.truncatedReason ? { truncated_reason: truncated.truncatedReason } : {}),
+  };
+  if (ignoreFiles) {
+    details.ignored_files = ignoreFiles;
+  }
+
+  return diffToolResult(`PR #${pullNumber} Diff:\n\`\`\`diff\n${truncated.text}\n\`\`\``, details);
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -242,76 +315,7 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
         truncated: false,
       },
       prepareParams: params => params,
-      // fallow-ignore-next-line complexity
-      execute: async params => {
-        const resolved = resolvePRParams(params, provider);
-
-        if (!resolved) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: 'Could not resolve PR: owner, repo, or pull_number missing and no PR context available.',
-              },
-            ],
-            details: {
-              pull_number: 0,
-              lines: 0,
-              truncated: false,
-            } satisfies GetPRDiffDetails,
-          };
-        }
-
-        const { owner, repo, pullNumber } = resolved;
-
-        const ignoreFiles = mergeIgnoreFiles(
-          config?.diffIgnorePatterns ?? [],
-          params.ignore_files ?? []
-        );
-
-        const diff = await provider.getPRDiff(owner, repo, pullNumber, ignoreFiles);
-
-        if (!diff) {
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: `No diff available for PR #${pullNumber}. This may not be a pull request, or the diff is empty.`,
-              },
-            ],
-            details: {
-              pull_number: pullNumber,
-              lines: 0,
-              truncated: false,
-            } satisfies GetPRDiffDetails,
-          };
-        }
-
-        const maxLines = params.max_lines ?? config?.diffMaxLines ?? 1000;
-        const maxBytes = config?.diffMaxBytes ?? 102_400;
-        const truncated = truncateDiff(diff, maxLines, maxBytes);
-
-        const finalLineCount = truncated.text.split('\n').length;
-        const details: GetPRDiffDetails = {
-          pull_number: pullNumber,
-          lines: finalLineCount,
-          truncated: truncated.truncated,
-          ...(truncated.truncatedReason ? { truncated_reason: truncated.truncatedReason } : {}),
-        };
-        if (ignoreFiles) {
-          details.ignored_files = ignoreFiles;
-        }
-
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `PR #${pullNumber} Diff:\n\`\`\`diff\n${truncated.text}\n\`\`\``,
-            },
-          ],
-          details: details satisfies GetPRDiffDetails,
-        };
-      },
+      execute: params => executeGetPRDiff(params, provider, config),
     }),
   });
 }

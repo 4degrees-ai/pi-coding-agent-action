@@ -3,4 +3,4 @@
  */
 
 // Main agent
-export { Agent } from './agent';
+export { Agent, wrapAgent } from './agent';

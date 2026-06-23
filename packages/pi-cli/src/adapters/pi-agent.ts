@@ -17,13 +17,14 @@
 
 import {
   Agent,
+  wrapAgent,
   type AgentEvents,
   type Logger,
   type PiAgent,
   type PiAgentFactory,
   type PiConfig,
+  type PlatformProvider,
 } from '@alexanderfortin/pi-orchestrator';
-import type { PlatformProvider } from '@alexanderfortin/pi-orchestrator';
 
 /**
  * Factory function for CLI Pi agent instances.
@@ -43,19 +44,5 @@ export const createCliPiAgent: PiAgentFactory = (
   };
   const agent = new Agent(logger, provider, config, events);
 
-  return {
-    async run(text: string) {
-      await agent.ready();
-      return agent.run(text);
-    },
-    getSessionStats() {
-      return agent.getSessionStats();
-    },
-    async exportSessionHtml(outputPath: string) {
-      return agent.exportSessionHtml(outputPath);
-    },
-    async exportSessionJsonl(outputPath: string) {
-      return agent.exportSessionJsonl(outputPath);
-    },
-  };
+  return wrapAgent(agent);
 };
