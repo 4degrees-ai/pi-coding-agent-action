@@ -320,19 +320,23 @@ describe('ActionOrchestrator', () => {
       expect(text).toBe('✅ Agent session completed');
     });
 
-    test('logs completion banner after session html export', async () => {
+    test('logs session html export path in summary block after banner', async () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
 
       const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
       const bannerIndex = infoCalls.indexOf('✅ Agent session completed');
-      const htmlExportCalls = infoCalls.filter((c: string) => c.includes('[session-html]'));
+      const htmlExportIndex = infoCalls.findIndex((c: string) =>
+        c.includes('📄 exported session HTML')
+      );
 
-      // The completion banner should appear after the HTML export log
-      if (htmlExportCalls.length > 0) {
-        const htmlExportIndex = infoCalls.findIndex((c: string) => c.includes('[session-html]'));
-        expect(bannerIndex).toBeGreaterThan(htmlExportIndex);
-      }
+      // The export path summary should appear after the banner (deferred
+      // to the summary block, not logged mid-stream during the export).
+      expect(bannerIndex).toBeGreaterThanOrEqual(0);
+      expect(htmlExportIndex).toBeGreaterThan(bannerIndex);
+      // The mid-stream [session-html] log is now at debug level, not info.
+      const staleInfoLogs = infoCalls.filter((c: string) => c.includes('[session-html]'));
+      expect(staleInfoLogs).toHaveLength(0);
     });
 
     test('includes execution duration in final comment metadata', async () => {
@@ -1508,17 +1512,44 @@ describe('ActionOrchestrator', () => {
       );
       expect(mockOutputSink.setOutput).toHaveBeenCalledWith('gist_id', 'abc123def456');
 
-      // logs footer (info) + GitHub notice annotation (descriptive prefix)
+      // The clickable viewer + gist links are surfaced in the summary
+      // block (info), NOT as GitHub notice annotations.
       expect(mockCore.info).toHaveBeenCalledWith(
+        '🔗 Session shared: https://pi.dev/session/#abc123def456'
+      );
+      expect(mockCore.info).toHaveBeenCalledWith(
+        '🔗 Session gist: https://gist.github.com/bot/abc123def456'
+      );
+      // No notice annotations are emitted for the share links.
+      const shareNotices = (mockCore.notice as any).mock.calls
+        .map((c: unknown[]) => String(c[0]))
+        .filter((m: string) => m.includes('Session shared') || m.includes('Session gist'));
+      expect(shareNotices).toHaveLength(0);
+      // Diagnostic detail is logged at debug level
+      expect(mockCore.debug).toHaveBeenCalledWith(
         expect.stringContaining('view session: https://pi.dev/session/#abc123def456')
       );
-      expect(mockCore.notice).toHaveBeenCalledWith(
-        'Session shared: https://pi.dev/session/#abc123def456'
-      );
 
-      // job summary
+      // The share links sit in the summary block after the banner and
+      // before the export path (banner -> token usage -> share -> export).
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      const bannerIndex = infoCalls.indexOf('✅ Agent session completed');
+      const shareIndex = infoCalls.indexOf(
+        '🔗 Session shared: https://pi.dev/session/#abc123def456'
+      );
+      const exportIndex = infoCalls.findIndex((c: string) =>
+        c.includes('📄 exported session HTML')
+      );
+      expect(bannerIndex).toBeGreaterThanOrEqual(0);
+      expect(shareIndex).toBeGreaterThan(bannerIndex);
+      expect(exportIndex).toBeGreaterThan(shareIndex);
+
+      // job summary exposes both clickable links
       expect(mockOutputSink.appendSummary).toHaveBeenCalledWith(
         expect.stringContaining('https://pi.dev/session/#abc123def456')
+      );
+      expect(mockOutputSink.appendSummary).toHaveBeenCalledWith(
+        expect.stringContaining('https://gist.github.com/bot/abc123def456')
       );
     });
 
@@ -1544,6 +1575,30 @@ describe('ActionOrchestrator', () => {
 
       expect(mockPiAgent.exportSessionHtml).toHaveBeenCalled();
       expect(mockOutputSink.setOutput).toHaveBeenCalledWith('session_html_path', expect.anything());
+    });
+
+    test('hides the auto-exported HTML path from the summary when export_session_html is off', async () => {
+      // Sharing auto-enables the HTML export to feed the gist, but the user
+      // didn't ask for a persisted HTML file — the throwaway path should not
+      // be advertised in the summary block.
+      const orchestrator = createOrchestrator({
+        shareSession: true,
+        githubToken: 'ghp_token',
+        exportSessionHtml: false,
+      });
+      await orchestrator.execute();
+
+      // The HTML was still produced (to feed the gist)...
+      expect(mockPiAgent.exportSessionHtml).toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('share_url', expect.anything());
+      // ...but the summary block must not surface the export path.
+      const infoCalls = (mockCore.info as any).mock.calls.map((c: any[]) => c[0] as string);
+      const htmlExportCalls = infoCalls.filter((c: string) =>
+        c.includes('📄 exported session HTML')
+      );
+      expect(htmlExportCalls).toHaveLength(0);
+      // The share links are still surfaced regardless.
+      expect(infoCalls).toContain('🔗 Session shared: https://pi.dev/session/#abc123def456');
     });
 
     test('skips sharing with a notice when no github_token is configured', async () => {

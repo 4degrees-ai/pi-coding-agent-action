@@ -59,6 +59,23 @@ export function buildSessionErrorBody(result: string, error: string): string {
  * injected adapters.
  */
 export class ActionOrchestrator {
+  /**
+   * Paths session exports were written to during the run.
+   *
+   * Populated by {@link exportSessionOutput} and surfaced in the
+   * post-run summary block (after the banner + token usage).
+   */
+  private exportPaths: { html?: string; jsonl?: string } = {};
+
+  /**
+   * Session-share URLs produced during the run.
+   *
+   * Populated by {@link createAndSurfaceGist} and surfaced in the
+   * post-run summary block so the clickable viewer + gist links appear
+   * there instead of as standalone GitHub notice annotations.
+   */
+  private shareUrls: { shareUrl?: string; gistUrl?: string } = {};
+
   constructor(
     private readonly config: PiConfig,
     private readonly logger: Logger,
@@ -212,15 +229,57 @@ export class ActionOrchestrator {
   }
 
   /**
-   * Log a banner-style message surrounded by visual separators + leading
+   * Log a banner-style message preceded by a visual separator + leading
    * blank line. Used for both success and failure notifications.
+   *
+   * Only a single top bar is emitted so that follow-up summary lines
+   * (token usage, export paths) read as part of the same block rather
+   * than being visually separated by a closing bar.
    */
   private logSessionBanner(message: string): void {
     const bar = '════'.repeat(16);
     this.logger.info('');
     this.logger.info(bar);
     this.logger.info(message);
-    this.logger.info(bar);
+  }
+
+  /**
+   * Log the session-export paths collected during the run.
+   *
+   * Called at the end of {@link finalize} so the export info appears in
+   * the summary block (after the banner + token usage) rather than
+   * mid-stream during the export itself. No-op when no exports succeeded.
+   *
+   * Only paths the user *explicitly* requested (via {@link PiConfig.exportSessionHtml}
+   * / {@link PiConfig.exportSessionJsonl}) are surfaced. When an HTML export
+   * is auto-enabled solely to feed {@link runSessionShare} (i.e. `shareSession`
+   * is on but `exportSessionHtml` is off), the throwaway path is hidden from
+   * the summary so it doesn't advertise a file the user never asked for.
+   */
+  private logExportPaths(): void {
+    if (this.exportPaths.html && this.config.exportSessionHtml) {
+      this.logger.info(`📄 exported session HTML to ${this.exportPaths.html}`);
+    }
+    if (this.exportPaths.jsonl && this.config.exportSessionJsonl) {
+      this.logger.info(`📄 exported session JSONL to ${this.exportPaths.jsonl}`);
+    }
+  }
+
+  /**
+   * Log the session-share URLs collected during the run.
+   *
+   * Called at the end of {@link finalize} so the clickable viewer and gist
+   * links appear in the summary block (after the banner + token usage)
+   * instead of as standalone GitHub notice annotations. No-op when sharing
+   * didn't run or was skipped.
+   */
+  private logShareUrls(): void {
+    if (this.shareUrls.shareUrl) {
+      this.logger.info(`🔗 Session shared: ${this.shareUrls.shareUrl}`);
+    }
+    if (this.shareUrls.gistUrl) {
+      this.logger.info(`🔗 Session gist: ${this.shareUrls.gistUrl}`);
+    }
   }
 
   /**
@@ -248,10 +307,11 @@ export class ActionOrchestrator {
   /**
    * Share the session as a secret GitHub Gist (pi `/share` equivalent).
    *
-   * Uploads the exported session HTML to a gist and surfaces the viewer
-   * link in three places: the logs footer (`info`), a GitHub notice
-   * annotation (`notice`), and the job summary (`appendSummary`). Also
-   * exposes `share_url` / `gist_url` / `gist_id` as action outputs.
+   * Uploads the exported session HTML to a gist and surfaces both the
+   * viewer link and the gist URL in the post-run summary block (via
+   * {@link logShareUrls}) and the job summary (`appendSummary`).
+   * Diagnostic details (gist id, raw URLs) are logged at `debug` level.
+   * Also exposes `share_url` / `gist_url` / `gist_id` as action outputs.
    *
    * Runs only when {@link PiConfig.shareSession} is enabled. Reads the
    * HTML file produced by {@link exportSessionOutput}; if the export was
@@ -346,9 +406,9 @@ export class ActionOrchestrator {
       return;
     }
 
-    this.logger.info(`[${tag}] shared session as gist ${gist.id}: ${gist.gistUrl}`);
-    this.logger.info(`[${tag}] view session: ${gist.shareUrl}`);
-    this.logger.notice(`Session shared: ${gist.shareUrl}`);
+    this.logger.debug(`[${tag}] shared session as gist ${gist.id}: ${gist.gistUrl}`);
+    this.logger.debug(`[${tag}] view session: ${gist.shareUrl}`);
+    this.shareUrls = { shareUrl: gist.shareUrl, gistUrl: gist.gistUrl };
     this.outputSink.setOutput('share_url', gist.shareUrl);
     this.outputSink.setOutput('gist_url', gist.gistUrl);
     this.outputSink.setOutput('gist_id', gist.id);
@@ -357,7 +417,9 @@ export class ActionOrchestrator {
     // outputs are set). Wrap separately so a summary failure doesn't log a
     // misleading "failed to share session" notice.
     try {
-      await this.outputSink.appendSummary?.(`🔗 **Session:** ${gist.shareUrl}\n`);
+      await this.outputSink.appendSummary?.(
+        `🔗 **Session:** ${gist.shareUrl}\n` + `🔗 **Gist:** ${gist.gistUrl}\n`
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.debug(`[${tag}] job summary write skipped: ${msg}`);
@@ -406,7 +468,8 @@ export class ActionOrchestrator {
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
       const exportFn = format === 'html' ? pi.exportSessionHtml : pi.exportSessionJsonl;
       await exportFn.call(pi, outputPath);
-      this.logger.info(`[${tag}] exported session ${formatLabel} to ${outputPath}`);
+      this.logger.debug(`[${tag}] exported session ${formatLabel} to ${outputPath}`);
+      this.exportPaths[format] = outputPath;
       this.outputSink.setOutput(`session_${format}_path`, outputPath);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -444,6 +507,13 @@ export class ActionOrchestrator {
       this.outputSink.setOutput('cost', sessionStats.cost);
       this.logTokenUsageReport(sessionStats);
     }
+
+    // Surface session-share URLs and export paths as part of the summary
+    // block so they appear alongside the status banner and token usage,
+    // rather than scattered earlier in the log stream or as standalone
+    // GitHub notice annotations.
+    this.logShareUrls();
+    this.logExportPaths();
 
     const executionDuration = startTime.until(Temporal.Now.instant());
     this.outputSink.setOutput('duration_seconds', executionDuration.total('seconds'));
