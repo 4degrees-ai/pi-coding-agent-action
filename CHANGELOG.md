@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-06-24
+
+### Added
+
+- improve job summary consistency for session exports and sharing (#332)
+- **orchestrator**: validate and clamp thinking_level against the resolved model (#330)
+
+### Changed
+
+- cleanup fallow smells
+- **deps-dev**: update dependencies (#327)
+- **deps**: update dependencies, Pi to v0.80.2 (#328)
+
 ## [2.22.0] - 2026-06-23
 
 ### Added
@@ -529,7 +542,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.22.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.23.0...HEAD
+[2.23.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.22.0...v2.23.0
 [2.22.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.21.0...v2.22.0
 [2.21.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.4...v2.21.0
 [2.20.4]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.3...v2.20.4
