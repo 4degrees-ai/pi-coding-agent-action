@@ -19,7 +19,7 @@ Inspired by OpenCode's [GitHub action](https://opencode.ai/docs/github/).
 
 ## Features
 
-- **Familiar workflow**: Supports the familiar workflow of running Pi coding agent as CLI (loading skills, extensions, AGENTS.md, etc.) in a GitHub CI/CD workflow.
+- **Familiar workflow**: Supports the familiar workflow of running Pi coding agent as CLI (loading skills, extensions, AGENTS.md, sharing sessions, etc.) in a GitHub CI/CD workflow.
 - **Minimal batteries included**: Tries to follow Pi minimalistic phylosophy while providing a comfortable UX out of the box, e.g. pretty print of logs, auto replies to comments, and tools to interact efficiently with git and GitHub-compatible APIs.
 - **Composable**: Provides useful inputs and outputs for chaining together multiple Pi sessions and/or other GitHub actions/workflows.
 - **Integrates with GitHub workflows**: Natively integrates with usual GitHub issue/PR workflows, invoke Pi both interactively (e.g. prefixing `/pi ` in an issue/PR comment) and programmatically (e.g. as a step in a workflow).
@@ -599,7 +599,7 @@ Both are disabled by default. When enabled, their file paths are exposed via the
 
 `share_session` replicates pi's interactive `/share` command: it uploads the exported session HTML to a **secret GitHub Gist** and surfaces a `pi.dev/session` viewer link (`https://pi.dev/session/#<gistId>`). No `gh` CLI is required — the action calls the GitHub Gist REST API directly, so it also works from Forgejo/Gitea runners. Set the `PI_SHARE_VIEWER_URL` environment variable to point at a self-hosted viewer (same env var the interactive `/share` command reads).
 
-The link is surfaced in three places: the job log footer, a GitHub **notice** annotation, and the **job summary** (`$GITHUB_STEP_SUMMARY`). It is also exposed as the `share_url`, `gist_url`, and `gist_id` outputs for downstream steps.
+The link is surfaced in two places: the job log footer and the **job summary** (`$GITHUB_STEP_SUMMARY`). It is also exposed as the `share_url`, `gist_url`, and `gist_id` outputs for downstream steps.
 
 Enabling `share_session` **auto-enables `export_session_html`** (the gist carries the HTML export's bytes), so you don't need to set both.
 
