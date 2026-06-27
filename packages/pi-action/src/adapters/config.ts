@@ -169,6 +169,30 @@ export function gatherActionsConfig(): PiConfig {
   const autoCompaction = parseBooleanInput(core.getInput('auto_compaction'), false);
   const shareSession = parseBooleanInput(core.getInput('share_session'), false);
 
+  // --- Session sharing storage backend inputs ---------------------------
+  const shareGistProviderRaw = core.getInput('share_gist_provider').trim().toLowerCase();
+  const shareGistProvider =
+    shareGistProviderRaw === 'opengist'
+      ? 'opengist'
+      : shareGistProviderRaw === 'github'
+        ? 'github'
+        : undefined;
+  // An unknown value (typo, or a backend we don't support yet) silently
+  // collapses to the github default. Warn so a misconfigured provider is
+  // visible instead of quietly creating a GitHub gist with ignored Opengist
+  // config.
+  if (shareGistProviderRaw && !shareGistProvider) {
+    core.warning(
+      `Unknown share_gist_provider "${shareGistProviderRaw}"; falling back to github. ` +
+        'Valid values are "github" and "opengist".'
+    );
+  }
+  const shareGistApiUrl = core.getInput('share_gist_api_url').trim() || undefined;
+  const shareGistToken = core.getInput('share_gist_token').trim() || undefined;
+  if (shareGistToken) {
+    core.setSecret(shareGistToken);
+  }
+
   // --- Optional positive-integer inputs ----------------------------------
   const diffMaxLines = parsePositiveIntInput(core.getInput('diff_max_lines'));
   const diffMaxBytes = parsePositiveIntInput(core.getInput('diff_max_bytes'));
@@ -197,6 +221,9 @@ export function gatherActionsConfig(): PiConfig {
     exportSessionJsonl,
     autoCompaction,
     shareSession,
+    ...(shareGistProvider ? { shareGistProvider } : {}),
+    ...(shareGistApiUrl ? { shareGistApiUrl } : {}),
+    ...(shareGistToken ? { shareGistToken } : {}),
     ...(githubToken ? { githubToken } : {}),
     ...(diffMaxLines ? { diffMaxLines } : {}),
     ...(diffMaxBytes ? { diffMaxBytes } : {}),

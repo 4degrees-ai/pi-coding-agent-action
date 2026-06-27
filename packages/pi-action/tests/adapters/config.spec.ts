@@ -50,6 +50,7 @@ describe('gatherActionsConfig', () => {
     coreMock.getInput.mockClear();
     coreMock.debug.mockClear();
     coreMock.setSecret.mockClear();
+    coreMock.warning.mockClear();
     mockCore();
   });
 
@@ -252,6 +253,46 @@ describe('gatherActionsConfig', () => {
       mockCore({ github_token: '' });
       gatherActionsConfig();
       expect(coreMock.setSecret).not.toHaveBeenCalled();
+    });
+
+    test('share_gist_provider defaults to undefined (github)', () => {
+      expect(gatherActionsConfig().shareGistProvider).toBeUndefined();
+    });
+
+    test('parses share_gist_provider opengist (case-insensitive)', () => {
+      mockCore({ share_gist_provider: 'Opengist' });
+      expect(gatherActionsConfig().shareGistProvider).toBe('opengist');
+    });
+
+    test('normalizes an unknown share_gist_provider to undefined and warns', () => {
+      mockCore({ share_gist_provider: 'dropbox' });
+      expect(gatherActionsConfig().shareGistProvider).toBeUndefined();
+      expect(coreMock.warning).toHaveBeenCalledWith(
+        expect.stringMatching(/Unknown share_gist_provider "dropbox".*falling back to github/)
+      );
+    });
+
+    test('does not warn for a recognised share_gist_provider', () => {
+      mockCore({ share_gist_provider: 'opengist' });
+      gatherActionsConfig();
+      expect(coreMock.warning).not.toHaveBeenCalled();
+    });
+
+    test('parses share_gist_api_url', () => {
+      mockCore({ share_gist_api_url: 'https://gist.l3x.in/api/gists' });
+      expect(gatherActionsConfig().shareGistApiUrl).toBe('https://gist.l3x.in/api/gists');
+    });
+
+    test('omits share_gist_api_url when empty', () => {
+      mockCore({ share_gist_api_url: '   ' });
+      expect(gatherActionsConfig().shareGistApiUrl).toBeUndefined();
+    });
+
+    test('parses share_gist_token and registers it as a secret', () => {
+      mockCore({ share_gist_token: 'og_secret' });
+      const config = gatherActionsConfig();
+      expect(config.shareGistToken).toBe('og_secret');
+      expect(coreMock.setSecret).toHaveBeenCalledWith('og_secret');
     });
   });
 });
