@@ -16,6 +16,7 @@ import { createRealPiAgent } from './adapters/pi-agent-adapter';
 import { gatherActionsConfig } from './adapters/config';
 import { ActionsOutputSink } from './adapters/output-sink';
 import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/pi-platform-github';
+import { resolveServerUrl } from './server-url';
 
 /**
  * Configure the Pi SDK's package directory for the bundled action.
@@ -72,12 +73,31 @@ export async function run() {
     payload.pull_request = payload.pull_request ?? { number: prNumber };
   }
 
+  // Resolve the effective server URL. The `server_url` input overrides the
+  // runner-advertised `GITHUB_SERVER_URL` (via `github.context.serverUrl`) —
+  // useful on self-hosted runners where the advertised URL is only reachable
+  // from inside the host network. Falls back to github.com.
+  //
+  // The baseline is derived through the same helper so both sides of the
+  // "override active" comparison are trailing-slash-normalized identically —
+  // a raw `github.context.serverUrl` comparison would log a false positive
+  // when the advertised URL has a trailing slash (and a false negative when
+  // an equivalent override differs only by a trailing slash).
+  const serverUrlInput = coreAdapter.getInput('server_url');
+  const serverUrl = resolveServerUrl(serverUrlInput, github.context.serverUrl);
+  const baselineServerUrl = resolveServerUrl(undefined, github.context.serverUrl);
+  if (serverUrl !== baselineServerUrl) {
+    coreAdapter.info(
+      `[run] server_url override active: using ${serverUrl} (runner advertises ${baselineServerUrl})`
+    );
+  }
+
   const platformContext = {
     repo: github.context.repo,
     issue: { number: issueNumber },
     eventName: github.context.eventName,
     payload,
-    serverUrl: github.context.serverUrl || 'https://github.com',
+    serverUrl,
     runId: github.context.runId,
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
     ...(githubCtx.actor !== undefined ? { actor: githubCtx.actor } : {}),
@@ -91,7 +111,7 @@ export async function run() {
     octokit,
     context: platformContext,
     logger: coreAdapter,
-    platformType: detectPlatform(platformContext.serverUrl),
+    platformType: detectPlatform(serverUrl),
     ...(triggerValue ? { trigger: triggerValue } : {}),
     ...(branchNameTemplate ? { branchNameTemplate } : {}),
   });

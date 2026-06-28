@@ -703,6 +703,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `share_gist_provider` | Storage backend for `share_session`: `github` (GitHub Gists + pi.dev viewer) or `opengist` (self-hosted instance; requires `share_gist_api_url`) | No | `github` |
 | `share_gist_api_url` | API URL for the share gist provider. Required for `opengist` (e.g. `https://gist.l3x.in/api/gists`); optional override for `github` | No | - |
 | `share_gist_token` | Token used to create the shared gist. Opengist access token (`og_…`, `gist:write` scope) for `opengist`; falls back to `github_token` | No | - |
+| `server_url` | Override the forge server URL (e.g. `https://git.example.com`) when the runner-advertised `GITHUB_SERVER_URL` points at an internally-reachable host (e.g. `http://localhost:3000` on a Forgejo runner behind Docker). Affects user-facing links (commits, PRs, action runs) and platform detection only — the API client keeps using the runner's `GITHUB_API_URL`. | No | - |
 | `thinking_level` | Model thinking level | No | off |
 | `token` | Provider API token. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g., `google-vertex` with Application Default Credentials) | No | - |
 | `trigger` | Trigger phrase used to invoke the action | No | /pi  |

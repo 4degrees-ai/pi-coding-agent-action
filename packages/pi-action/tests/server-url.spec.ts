@@ -1,0 +1,160 @@
+/**
+ * Tests for resolveServerUrl() — the action-side server URL resolution.
+ *
+ * Covers the precedence chain: `server_url` input → runner-advertised
+ * (`GITHUB_SERVER_URL`) → default github.com. The function is pure, so these
+ * tests exercise it directly without `@actions/core` / `@actions/github`.
+ */
+
+import { describe, expect, test } from 'bun:test';
+import { resolveServerUrl, DEFAULT_SERVER_URL } from '../src/server-url';
+
+describe('resolveServerUrl', () => {
+  describe('input override (highest precedence)', () => {
+    test('uses the action input when provided', () => {
+      expect(resolveServerUrl('https://git.example.com', 'http://localhost:3000')).toBe(
+        'https://git.example.com'
+      );
+    });
+
+    test('input wins even when the runner URL is the default', () => {
+      expect(resolveServerUrl('https://git.example.com', 'https://github.com')).toBe(
+        'https://git.example.com'
+      );
+    });
+
+    test('input wins even when context URL is undefined', () => {
+      expect(resolveServerUrl('https://forgejo.example.com', undefined)).toBe(
+        'https://forgejo.example.com'
+      );
+    });
+
+    test('trims whitespace from the input', () => {
+      expect(resolveServerUrl('  https://git.example.com  ', 'http://localhost:3000')).toBe(
+        'https://git.example.com'
+      );
+    });
+  });
+
+  describe('fallback to runner-advertised URL', () => {
+    test('uses the context URL when input is empty', () => {
+      expect(resolveServerUrl('', 'https://github.example.internal')).toBe(
+        'https://github.example.internal'
+      );
+    });
+
+    test('uses the context URL when input is undefined', () => {
+      expect(resolveServerUrl(undefined, 'https://codeberg.org')).toBe('https://codeberg.org');
+    });
+
+    test('uses the context URL when input is whitespace-only', () => {
+      expect(resolveServerUrl('   ', 'https://forgejo.example.com')).toBe(
+        'https://forgejo.example.com'
+      );
+    });
+  });
+
+  describe('default fallback', () => {
+    test('falls back to github.com when both input and context are empty', () => {
+      expect(resolveServerUrl('', undefined)).toBe(DEFAULT_SERVER_URL);
+    });
+
+    test('falls back to github.com when both input and context are whitespace/undefined', () => {
+      expect(resolveServerUrl('  ', '')).toBe(DEFAULT_SERVER_URL);
+    });
+
+    test('default is the canonical GitHub URL', () => {
+      expect(DEFAULT_SERVER_URL).toBe('https://github.com');
+    });
+  });
+
+  describe('trailing-slash normalization', () => {
+    test('strips a single trailing slash from the input override', () => {
+      expect(resolveServerUrl('https://git.example.com/', 'http://localhost:3000')).toBe(
+        'https://git.example.com'
+      );
+    });
+
+    test('strips multiple trailing slashes from the input override', () => {
+      expect(resolveServerUrl('https://git.example.com///', undefined)).toBe(
+        'https://git.example.com'
+      );
+    });
+
+    test('preserves internal path separators', () => {
+      // Only *trailing* slashes are stripped; a path like /sub must survive.
+      expect(resolveServerUrl('https://git.example.com/sub', undefined)).toBe(
+        'https://git.example.com/sub'
+      );
+    });
+
+    test('normalizes the runner-advertised URL too', () => {
+      expect(resolveServerUrl('', 'https://github.example.com/')).toBe(
+        'https://github.example.com'
+      );
+    });
+  });
+
+  describe('slash-only input does not collapse to empty', () => {
+    // A slash-only value (e.g. `server_url: /`) is truthy after trim but
+    // `stripTrailingSlashes('/')` returns ''. That must NOT be returned as the
+    // resolved URL — it would break every permalink builder with a leading `//`.
+    test('slash-only input falls back to the advertised URL', () => {
+      expect(resolveServerUrl('/', 'https://github.com')).toBe('https://github.com');
+    });
+
+    test('multiple-slashes-only input falls back to the advertised URL', () => {
+      expect(resolveServerUrl('///', 'https://git.example.com')).toBe('https://git.example.com');
+    });
+
+    test('slash-only input with no advertised URL falls back to the default', () => {
+      expect(resolveServerUrl('/', undefined)).toBe(DEFAULT_SERVER_URL);
+    });
+
+    test('slash-only advertised URL also falls back to the default', () => {
+      expect(resolveServerUrl('', '/')).toBe(DEFAULT_SERVER_URL);
+    });
+  });
+
+  describe('override-vs-baseline comparison (run.ts log consistency)', () => {
+    // run.ts derives the "override active" log by comparing the resolved URL
+    // against the no-input baseline — both through resolveServerUrl() — so the
+    // two sides are normalized identically. These tests lock that invariant in
+    // so a trailing-slash difference never flips the comparison.
+    test('override equivalent to advertised (differs only by trailing slash) is not an override', () => {
+      const resolved = resolveServerUrl('https://git.example.com/', 'https://git.example.com');
+      const baseline = resolveServerUrl(undefined, 'https://git.example.com');
+      expect(resolved).toBe(baseline);
+      expect(resolved).toBe('https://git.example.com');
+    });
+
+    test('no input + advertised URL with trailing slash is not a false-positive override', () => {
+      const resolved = resolveServerUrl('', 'https://github.example.com/');
+      const baseline = resolveServerUrl(undefined, 'https://github.example.com/');
+      expect(resolved).toBe(baseline);
+      expect(resolved).toBe('https://github.example.com');
+    });
+
+    test('a genuine override is still detected after normalization', () => {
+      const resolved = resolveServerUrl('https://git.example.com/', 'http://localhost:3000');
+      const baseline = resolveServerUrl(undefined, 'http://localhost:3000');
+      expect(resolved).not.toBe(baseline);
+    });
+  });
+
+  describe('self-hosted Forgejo scenario (issue #339)', () => {
+    // A Forgejo instance reachable from the host as http://localhost:3000 but
+    // externally as https://git.example.com. The runner advertises the internal
+    // URL; the user overrides it via the action input so links & platform
+    // detection target the external host.
+    test('override corrects an internal-only localhost URL', () => {
+      expect(resolveServerUrl('https://git.example.com', 'http://localhost:3000')).toBe(
+        'https://git.example.com'
+      );
+    });
+
+    test('without override, the internal URL is passed through', () => {
+      expect(resolveServerUrl('', 'http://localhost:3000')).toBe('http://localhost:3000');
+    });
+  });
+});
