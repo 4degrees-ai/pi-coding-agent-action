@@ -15,7 +15,10 @@ import { RealGitAdapter } from './adapters/git-adapter';
 import { createRealPiAgent } from './adapters/pi-agent-adapter';
 import { gatherActionsConfig } from './adapters/config';
 import { ActionsOutputSink } from './adapters/output-sink';
-import { createGitHubPlatformProvider, detectPlatform } from '@alexanderfortin/pi-platform-github';
+import {
+  createGitHubPlatformProvider,
+  parsePlatformType,
+} from '@alexanderfortin/pi-platform-github';
 import { resolveServerUrl } from './server-url';
 
 /**
@@ -92,6 +95,14 @@ export async function run() {
     );
   }
 
+  // GITHUB_RUN_ATTEMPT is 1 for the first run and increments on re-runs.
+  // Forgejo/Codeberg action-run URLs include it as an /attempt/{n} segment.
+  // Guard against malformed values (NaN/0) that would bypass the ?? 1
+  // fallback in buildActionRunUrl.
+  const runAttemptNum = Number(process.env.GITHUB_RUN_ATTEMPT);
+  const runAttempt =
+    Number.isFinite(runAttemptNum) && runAttemptNum > 0 ? runAttemptNum : undefined;
+
   const platformContext = {
     repo: github.context.repo,
     issue: { number: issueNumber },
@@ -99,6 +110,7 @@ export async function run() {
     payload,
     serverUrl,
     runId: github.context.runId,
+    ...(runAttempt !== undefined ? { runAttempt } : {}),
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
     ...(githubCtx.actor !== undefined ? { actor: githubCtx.actor } : {}),
     ...(githubCtx.sha !== undefined ? { sha: githubCtx.sha } : {}),
@@ -107,11 +119,21 @@ export async function run() {
   // Create the platform provider with explicit deps (no singletons)
   const triggerValue = coreAdapter.getInput('trigger');
   const branchNameTemplate = coreAdapter.getInput('branch_name_template');
+  // Platform is an explicit input (default: github). It is no longer
+  // auto-detected from the server URL — hostname-based detection could
+  // not reliably distinguish self-hosted Forgejo from self-hosted GitHub
+  // Enterprise, so users set `platform` directly (e.g. forgejo).
+  const platformType = parsePlatformType(coreAdapter.getInput('platform'), raw =>
+    coreAdapter.warning(
+      `Unknown platform "${raw}"; falling back to github. ` +
+        'Valid values are github, codeberg, forgejo (or gitea).'
+    )
+  );
   const platformProvider = createGitHubPlatformProvider({
     octokit,
     context: platformContext,
     logger: coreAdapter,
-    platformType: detectPlatform(serverUrl),
+    platformType,
     ...(triggerValue ? { trigger: triggerValue } : {}),
     ...(branchNameTemplate ? { branchNameTemplate } : {}),
   });
