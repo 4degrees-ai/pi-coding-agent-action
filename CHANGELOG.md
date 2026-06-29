@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-06-29
+
+### Added
+
+- add `server_url` input to override the runner-advertised server URL (#340)
+- **share**: add Opengist backend for session sharing (#338)
+
+### Changed
+
+- note Forgejo compatibility has been confirmed (#335)
+- **deps-dev**: update dependencies (#333)
+- **deps-dev**: update dependencies (#336)
+- **deps-dev**: update dependencies (#343)
+- **deps-dev**: update dependencies (#348)
+- update README.md
+
+### Fixed
+
+- correct Forgejo/Codeberg "View action run" footer link URL (#342)
+- thread platformType into the git adapter so the footer URL respects the platform (#346)
+- thread resolved platformType into CLI API base URL (#344)
+- use runNumber (not runId) for Forgejo "View action run" footer link (#347)
+
 ## [2.23.0] - 2026-06-24
 
 ### Added
@@ -542,7 +565,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.23.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.24.0...HEAD
+[2.24.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.23.0...v2.24.0
 [2.23.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.22.0...v2.23.0
 [2.22.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.21.0...v2.22.0
 [2.21.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.20.4...v2.21.0
