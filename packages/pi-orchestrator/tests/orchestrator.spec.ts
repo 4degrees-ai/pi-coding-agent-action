@@ -1778,28 +1778,30 @@ describe('ActionOrchestrator', () => {
       );
     });
 
-    test('uses githubToken as the share token fallback for Opengist', async () => {
-      globalThis.fetch = mock(async () => ({
-        ok: true,
-        status: 201,
-        json: async () => ({
-          id: 'og-uuid',
-          html_url: 'https://gist.l3x.in/bot/s',
-        }),
-        text: async () => '',
-      })) as unknown as typeof fetch;
-
+    test('does not fall back to githubToken for Opengist (would always 401)', async () => {
+      // A GitHub token can never authenticate against a self-hosted Opengist
+      // instance, so the opengist provider must NOT cross over to githubToken.
+      // With no shareGistToken the share is skipped with a clear notice instead
+      // of sending `Bearer ghp_…` and producing a confusing `401 Bad credentials`.
       const orchestrator = createOrchestrator({
         shareSession: true,
         shareGistProvider: 'opengist',
         shareGistApiUrl: 'https://gist.l3x.in/api/gists',
-        // shareGistToken unset — should fall back to githubToken
+        // shareGistToken intentionally unset — must NOT fall back to githubToken
         githubToken: 'ghp_fallback',
       });
       await orchestrator.execute();
 
-      const init = (globalThis.fetch as any).mock.calls[0][1];
-      expect(init.headers.Authorization).toBe('Bearer ghp_fallback');
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('share_url', expect.anything());
+      // The notice must lead with the opengist-specific hint (share_gist_token)
+      // and must NOT mention github_token — a GitHub token can never
+      // authenticate against a self-hosted Opengist instance.
+      expect(mockCore.notice).toHaveBeenCalledWith(
+        expect.stringContaining('no share token configured')
+      );
+      expect(mockCore.notice).toHaveBeenCalledWith(expect.stringContaining('via share_gist_token'));
+      expect(mockCore.notice).not.toHaveBeenCalledWith(expect.stringContaining('via github_token'));
     });
   });
 });
