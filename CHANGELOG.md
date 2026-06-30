@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.25.0] - 2026-06-30
+
+### Added
+
+- **share**: add custom viewer URL support (gistviewer.l3x.in) (#351)
+
+### Changed
+
+- highlight Opengist sharing in README and clarify wording (#355)
+- **deps-dev**: update dependencies (#349)
+
+### Fixed
+
+- **share**: propagate OPENGIST_TOKEN through reusable workflow + drop harmful opengist token crossover (#353)
+
 ## [2.24.0] - 2026-06-29
 
 ### Added
@@ -565,7 +580,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.24.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.25.0...HEAD
+[2.25.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.24.0...v2.25.0
 [2.24.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.23.0...v2.24.0
 [2.23.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.22.0...v2.23.0
 [2.22.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.21.0...v2.22.0
