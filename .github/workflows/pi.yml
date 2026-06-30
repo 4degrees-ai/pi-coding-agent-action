@@ -46,8 +46,13 @@ jobs:
       - name: Run Pi agent
         id: pi
         uses: shaftoe/pi-coding-agent-action@develop
+        env:
+          PI_SHARE_VIEWER_URL: https://gistviewer.l3x.in/
         with:
           share_session: true
+          share_gist_provider: opengist
+          share_gist_api_url: https://gist.l3x.in/api/gists
+          share_gist_token: ${{ secrets.OPENGIST_TOKEN }}
           github_token: ${{ secrets.gh_token }}
           provider: ${{ vars.PROVIDER }}
           model: ${{ vars.MODEL }}
