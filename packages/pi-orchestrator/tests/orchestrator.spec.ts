@@ -1725,6 +1725,43 @@ describe('ActionOrchestrator', () => {
       );
     });
 
+    test('Opengist share_url uses a custom viewer link when PI_SHARE_VIEWER_URL is set', async () => {
+      // With a non-pi.dev viewer configured, the Opengist share_url becomes
+      // <viewer>#<gistPageUrl> instead of the self-rendering raw link.
+      globalThis.fetch = mock(async () => ({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: 'og-uuid-123',
+          html_url: 'https://gist.l3x.in/bot/my-session',
+        }),
+        text: async () => '',
+      })) as unknown as typeof fetch;
+
+      const originalViewer = process.env.PI_SHARE_VIEWER_URL;
+      process.env.PI_SHARE_VIEWER_URL = 'https://gistviewer.l3x.in/';
+      try {
+        const orchestrator = createOrchestrator({
+          shareSession: true,
+          shareGistProvider: 'opengist',
+          shareGistApiUrl: 'https://gist.l3x.in/api/gists',
+          shareGistToken: 'og_opengist-token',
+        });
+        await orchestrator.execute();
+
+        expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+          'share_url',
+          'https://gistviewer.l3x.in/#https://gist.l3x.in/bot/my-session'
+        );
+      } finally {
+        if (originalViewer === undefined) {
+          delete process.env.PI_SHARE_VIEWER_URL;
+        } else {
+          process.env.PI_SHARE_VIEWER_URL = originalViewer;
+        }
+      }
+    });
+
     test('skips Opengist sharing with a notice when share_gist_api_url is missing', async () => {
       const orchestrator = createOrchestrator({
         shareSession: true,
