@@ -30,6 +30,7 @@ jobs:
         dir:
           - '.'
           - 'packages/pi-action'
+          - 'packages/pi-action-bridge'
           - 'packages/pi-cli'
           - 'packages/pi-orchestrator'
           - 'packages/pi-platform-github'
