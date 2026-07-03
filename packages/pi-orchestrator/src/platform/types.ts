@@ -163,6 +163,20 @@ export interface CreatePullRequestDetails {
   baseBranch: string;
   dryRun: boolean;
   cancelled?: boolean;
+  /**
+   * `true` on the normal success path; `false` when the branch was created
+   * and pushed successfully but the PR object could not be opened (e.g.
+   * token lacks `pull-requests: write` on Forgejo). When `false`,
+   * {@link compareUrl} provides a manual-open link and
+   * {@link pullRequestUrl} is empty.
+   */
+  prCreated?: boolean;
+  /**
+   * Compare URL for manually opening a PR when automatic creation failed
+   * (e.g. `{serverUrl}/{owner}/{repo}/compare/{base}...{head}`).
+   * Present only when {@link prCreated} is `false`.
+   */
+  compareUrl?: string;
 }
 
 export interface UpdatePullRequestParams {
