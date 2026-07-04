@@ -67,7 +67,7 @@ export function updatePullRequestToolFactory(provider: PlatformProvider) {
     label: 'Update Pull Request',
     description: UPDATE_PULL_REQUEST_DESCRIPTION,
     promptSnippet: UPDATE_PULL_REQUEST_PROMPT_SNIPPET,
-    promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES,
+    promptGuidelines: UPDATE_PULL_REQUEST_PROMPT_GUIDELINES(provider.type),
     parameters: updatePullRequestSchema,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_UPDATE_PR,

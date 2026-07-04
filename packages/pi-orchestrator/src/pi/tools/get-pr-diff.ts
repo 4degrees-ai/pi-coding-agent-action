@@ -303,9 +303,9 @@ export function getPRDiffToolFactory(provider: PlatformProvider, config?: DiffCo
   return defineTool({
     name: 'get_pr_diff',
     label: 'Get PR Diff',
-    description: GET_PR_DIFF_DESCRIPTION,
+    description: GET_PR_DIFF_DESCRIPTION(provider.type),
     promptSnippet: GET_PR_DIFF_PROMPT_SNIPPET,
-    promptGuidelines: GET_PR_DIFF_PROMPT_GUIDELINES,
+    promptGuidelines: GET_PR_DIFF_PROMPT_GUIDELINES(provider.type),
     parameters: getPRDiffSchema,
     execute: withCancellation<GetPRDiffToolParams, GetPRDiffDetails, GetPRDiffToolParams>({
       cancellationMessage: CANCELLATION_MESSAGE_GET_PR_DIFF,

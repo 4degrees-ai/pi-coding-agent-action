@@ -95,7 +95,7 @@ export function createReviewToolFactory(provider: PlatformProvider) {
   return defineTool({
     name: 'create_pull_request_review',
     label: 'Create Pull Request Review',
-    description: CREATE_REVIEW_DESCRIPTION,
+    description: CREATE_REVIEW_DESCRIPTION(provider.type),
     promptSnippet: CREATE_REVIEW_PROMPT_SNIPPET,
     promptGuidelines: CREATE_REVIEW_PROMPT_GUIDELINES,
     parameters: createReviewSchema,

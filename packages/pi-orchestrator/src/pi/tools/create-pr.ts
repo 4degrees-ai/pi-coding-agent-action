@@ -57,7 +57,7 @@ export function createPRToolFactory(provider: PlatformProvider) {
   return defineTool({
     name: 'create_pull_request',
     label: 'Create Pull Request',
-    description: CREATE_PULL_REQUEST_DESCRIPTION,
+    description: CREATE_PULL_REQUEST_DESCRIPTION(provider.type),
     promptSnippet: CREATE_PULL_REQUEST_PROMPT_SNIPPET,
     promptGuidelines: CREATE_PULL_REQUEST_PROMPT_GUIDELINES,
     parameters: createPullRequestSchema,

@@ -60,7 +60,7 @@ export function getWorkflowRunLogsToolFactory(provider: PlatformProvider) {
   return defineTool({
     name: 'get_workflow_run_logs',
     label: 'Get Workflow Run Logs',
-    description: GET_WORKFLOW_RUN_LOGS_DESCRIPTION,
+    description: GET_WORKFLOW_RUN_LOGS_DESCRIPTION(provider.type),
     promptSnippet: GET_WORKFLOW_RUN_LOGS_PROMPT_SNIPPET,
     promptGuidelines: GET_WORKFLOW_RUN_LOGS_PROMPT_GUIDELINES,
     parameters: getWorkflowRunLogsSchema,

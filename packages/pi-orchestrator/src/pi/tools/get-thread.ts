@@ -85,9 +85,9 @@ export function getIssueOrPRThreadToolFactory(provider: PlatformProvider) {
   return defineTool({
     name: 'get_issue_or_pr_thread',
     label: 'Get Issue/PR Thread',
-    description: GET_ISSUE_PR_THREAD_DESCRIPTION,
-    promptSnippet: GET_ISSUE_PR_THREAD_PROMPT_SNIPPET,
-    promptGuidelines: GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES,
+    description: GET_ISSUE_PR_THREAD_DESCRIPTION(provider.type),
+    promptSnippet: GET_ISSUE_PR_THREAD_PROMPT_SNIPPET(provider.type),
+    promptGuidelines: GET_ISSUE_PR_THREAD_PROMPT_GUIDELINES(provider.type),
     parameters: getIssueOrPRThreadSchema,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_THREAD,

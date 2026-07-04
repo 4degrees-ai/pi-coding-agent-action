@@ -72,7 +72,7 @@ export function getCIStatusToolFactory(provider: PlatformProvider) {
     label: 'Get CI Status',
     description: GET_CI_STATUS_DESCRIPTION,
     promptSnippet: GET_CI_STATUS_PROMPT_SNIPPET,
-    promptGuidelines: GET_CI_STATUS_PROMPT_GUIDELINES,
+    promptGuidelines: GET_CI_STATUS_PROMPT_GUIDELINES(provider.type),
     parameters: getCIStatusSchema,
     execute: withCancellation({
       cancellationMessage: CANCELLATION_MESSAGE_GET_CI_STATUS,
