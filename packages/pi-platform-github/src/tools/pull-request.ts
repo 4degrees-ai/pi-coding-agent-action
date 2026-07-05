@@ -494,10 +494,14 @@ interface PrepareBranchAndPRResult {
  * intentionally separated: git-data operations (refs, blobs, trees,
  * commits) can succeed with push-only tokens, while `pulls.create` requires
  * `pull-requests: write`. On Forgejo the ephemeral Actions token sometimes
- * has the former but not the latter, so we catch **only** 401/403
+ * has the former but not the latter, so we catch **only** 401/403/404
  * (permission) errors from `pulls.create` and return a structured result
- * instead of throwing. All other errors (422 already-exists, 5xx, etc.)
- * are re-thrown so they are not silently masked as partial success.
+ * instead of throwing. (Forgejo returns 404 — "Can't read pulls or
+ * can't read UnitTypeCode" — instead of 403 when the internal actions
+ * bot user lacks the unit-level permission to create PRs; see the
+ * inline comment below for details.) All other errors (422
+ * already-exists, 5xx, etc.) are re-thrown so they are not silently
+ * masked as partial success.
  *
  * Throws `Error` when branch/commit creation itself fails (e.g. no changes
  * detected, API error on git-data endpoints) or when PR creation fails with
@@ -568,10 +572,17 @@ async function prepareBranchAndCreatePR(
   // Open the PR — this can fail independently of branch creation (e.g.
   // the token has push access but lacks pull-requests: write on Forgejo).
   //
-  // We only fall back to a compare URL for token-permission failures
-  // (401/403), which is the Forgejo scenario this targets. Other errors
-  // are re-thrown so they surface to the agent/user rather than being
-  // silently masked as partial success:
+  // We only fall back to a compare URL for token-permission failures,
+  // which is the Forgejo scenario this targets:
+  //   - 401/403 — classic permission-denied responses.
+  //   - 404 — Forgejo returns this ("Can't read pulls or can't read
+  //     UnitTypeCode") when the internal actions bot user lacks the
+  //     unit-level permission to create PRs, even though git push
+  //     succeeded. The 404 is semantically a permission error here,
+  //     not a "branch not found" error (the branch was just pushed).
+  //
+  // Other errors are re-thrown so they surface to the agent/user rather
+  // than being silently masked as partial success:
   //   - 422 "A pull request already exists" (e.g. action re-run) → the
   //     agent should use update_pull_request instead of opening a PR
   //     that already exists.
@@ -583,7 +594,7 @@ async function prepareBranchAndCreatePR(
   } catch (error) {
     const status = getErrorStatus(error);
     const message = error instanceof Error ? error.message : String(error);
-    if (status !== 401 && status !== 403) {
+    if (status !== 401 && status !== 403 && status !== 404) {
       log.debug(
         `PR creation failed with HTTP ${status ?? 'unknown'} (not a ` +
           `permission error) — re-throwing after branch "${head}" was pushed.`
