@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.25.1] - 2026-07-07
+
+### Changed
+
+- **deps-dev**: bump fallow-rs/fallow from 2 to 3 (#363)
+- **deps-dev**: update dependencies (#359)
+- **deps-dev**: update dependencies (#360)
+- **deps-dev**: update dependencies (#367)
+- **deps-dev**: update dependencies (#370)
+- **deps-dev**: update dependencies (#371)
+- **deps**: update dependencies, Pi to v0.80.3 (#358)
+
+### Fixed
+
+- improve create_pull_request Forgejo compatibility with API URL fix and compare-URL fallback (#362)
+- make system prompt dynamic based on platform input (#366)
+- **platform-github**: treat HTTP 404 from pulls.create as a permission error on Forgejo (#369)
+
 ## [2.25.0] - 2026-06-30
 
 ### Added
@@ -580,7 +598,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.25.0...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.25.1...HEAD
+[2.25.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.25.0...v2.25.1
 [2.25.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.24.0...v2.25.0
 [2.24.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.23.0...v2.24.0
 [2.23.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.22.0...v2.23.0
