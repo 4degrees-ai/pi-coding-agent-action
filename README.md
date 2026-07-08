@@ -82,7 +82,7 @@ If you need to pin to a specific Pi SDK version check out previous release tags 
 | `@octokit/core` | `7.0.6` | Octokit REST API client core |
 | `@octokit/plugin-rest-endpoint-methods` | `17.0.0` | Octokit REST API endpoint methods |
 | `ignore` | `7.0.5` | `.gitignore`-style pattern matching |
-| `typebox` | `1.3.4` | JSON Schema Type Builder |
+| `typebox` | `1.3.5` | JSON Schema Type Builder |
 
 <!-- DEPS_TABLE_END -->
 
