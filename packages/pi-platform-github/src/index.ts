@@ -111,23 +111,17 @@ export { getWorkflowRunLogs } from './tools/get-workflow-run-logs';
 
 // Git operations (used by tools internally)
 export {
-  createBlobsAndTree,
-  createCommitAndUpdateBranch,
+  commitAndPushBranch,
   appendCoAuthoredBy,
-  buildFileMap,
-  scanForChanges,
-  scanDirectory,
+  hasLocalChanges,
+  workspaceHasChanges,
+  ensureGitIdentity,
+  getWorkspaceChangePaths,
+  checkoutExistingBranch,
   createLogger,
 } from './git';
 
-export type {
-  CreateBlobsAndTreeParams,
-  CreateCommitAndUpdateBranchParams,
-  FileMode,
-  TreeEntry,
-  ChangeScanResult,
-  ScanDirectoryParams,
-} from './git';
+export type { CommitAndPushOptions, WorkspaceChangePaths } from './git';
 
 // GitHub API token resolution (used by pi-cli + pi-action-bridge)
 export { resolveGitHubToken } from './auth';

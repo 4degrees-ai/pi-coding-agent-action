@@ -1,4 +1,4 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-logic' });
@@ -46,13 +46,13 @@ interface _UpdatePullRequestParams {
   dryRun?: boolean;
 }
 
+import { setupGitRepo, cleanupGitRepo } from './helpers/git-repo';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { execSync } from 'node:child_process';
+
 describe('applyCommit', () => {
-  function createGitDeps() {
-    const createBlob = mock(() => Promise.resolve({ data: { sha: 'blob-sha' } }));
-    const createTree = mock(() => Promise.resolve({ data: { sha: 'tree-sha' } }));
-    const createCommit = mock(() => Promise.resolve({ data: { sha: 'commit-sha' } }));
-    const updateRef = mock(() => Promise.resolve({ data: {} }));
-    const getTree = mock(() => Promise.resolve({ data: { tree: [] } }));
+  function createDeps(workspace: string) {
     const info = mock(() => {});
     const debug = mock(() => {});
     const logger = {
@@ -64,34 +64,42 @@ describe('applyCommit', () => {
     };
 
     const deps = {
-      context: mockContext,
-      octokit: {
-        rest: {
-          git: {
-            createBlob,
-            createTree,
-            createCommit,
-            updateRef,
-            getTree,
-            getBlob: mock(() => Promise.resolve({ data: { content: '' } })),
-          },
-        },
-      },
+      context: { ...mockContext, workspace },
       logger,
     } as any;
-    return { deps, createBlob, createTree, createCommit, updateRef, info, debug, logger };
+    return { deps, info, debug, logger };
   }
 
+  let repo: ReturnType<typeof setupGitRepo>;
+
+  beforeEach(() => {
+    repo = setupGitRepo();
+    if (repo) {
+      // Create a feature branch on the remote so checkoutExistingBranch works
+      execSync('git checkout -b feat', { cwd: repo.workspace, stdio: 'pipe' });
+      execSync('git push -u origin feat', { cwd: repo.workspace, stdio: 'pipe' });
+      execSync('git checkout main', { cwd: repo.workspace, stdio: 'pipe' });
+    }
+  });
+
+  afterEach(() => {
+    if (repo) {
+      cleanupGitRepo(repo.workspace);
+    }
+  });
+
   test('returns undefined and logs when no changes to apply', async () => {
+    if (!repo) {
+      return;
+    }
     const module = await getModule();
     const { applyCommit } = module;
 
-    const { deps, createBlob, createTree, createCommit, updateRef, info } = createGitDeps();
+    const { deps, info } = createDeps(repo.workspace);
 
     const sha = await applyCommit(deps, {
-      changedFiles: [],
-      deletedFiles: [],
-      headSha: 'abc',
+      changedPaths: [],
+      deletedPaths: [],
       headBranch: 'feat',
       message: 'msg',
       pullNumber: 42,
@@ -102,65 +110,68 @@ describe('applyCommit', () => {
     expect(info).toHaveBeenCalledWith(
       'No code changes detected, only updating PR metadata if provided'
     );
-    expect(createBlob).not.toHaveBeenCalled();
-    expect(createTree).not.toHaveBeenCalled();
-    expect(createCommit).not.toHaveBeenCalled();
-    expect(updateRef).not.toHaveBeenCalled();
   });
 
-  test('creates blobs/tree, generates message, creates commit, updates branch', async () => {
+  test('commits and pushes via git CLI with auto-generated message', async () => {
+    if (!repo) {
+      return;
+    }
     const module = await getModule();
     const { applyCommit } = module;
 
-    const { deps, createBlob, createTree, createCommit, updateRef, info } = createGitDeps();
+    // Make changes so the working tree is dirty
+    fs.writeFileSync(path.join(repo.workspace, 'a.ts'), 'export {};');
+    fs.writeFileSync(path.join(repo.workspace, 'b.ts'), 'export {};');
 
-    const changedFiles = [
-      { path: 'a.ts', content: 'a', mode: '100644' as const },
-      { path: 'b.ts', content: 'b', mode: '100644' as const },
-    ];
+    const { deps, info } = createDeps(repo.workspace);
+
+    const changedFiles = ['a.ts', 'b.ts'];
 
     const sha = await applyCommit(deps, {
-      changedFiles,
-      deletedFiles: ['old.ts'],
-      headSha: 'parent-sha',
+      changedPaths: changedFiles,
+      deletedPaths: [],
       headBranch: 'feat',
       message: undefined, // force auto-generated message
       pullNumber: 7,
       log: deps.logger,
     });
 
-    expect(sha).toBe('commit-sha');
-    expect(createBlob).toHaveBeenCalledTimes(2);
-    expect(createTree).toHaveBeenCalledTimes(1);
-    // commit message should be auto-generated
-    expect(createCommit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: 'Update PR #7: 2 modified/new file(s), 1 deleted file(s)',
-      })
-    );
-    expect(updateRef).toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith('Created new commit commit-sha on branch feat');
+    expect(sha).toMatch(/^[0-9a-f]{7,40}$/);
+    expect(info).toHaveBeenCalledWith(`Created new commit ${sha} on branch feat`);
+
+    // Verify the commit message was auto-generated (check remote log)
+    const logOutput = execSync('git log --oneline -1 feat', {
+      cwd: repo.remoteDir,
+      encoding: 'utf-8',
+    });
+    expect(logOutput).toContain('Update PR #7');
   });
 
   test('uses explicit message when provided', async () => {
+    if (!repo) {
+      return;
+    }
     const module = await getModule();
     const { applyCommit } = module;
 
-    const { deps, createCommit } = createGitDeps();
+    fs.writeFileSync(path.join(repo.workspace, 'a.ts'), 'export {};');
+
+    const { deps } = createDeps(repo.workspace);
 
     await applyCommit(deps, {
-      changedFiles: [{ path: 'a.ts', content: 'a', mode: '100644' as const }],
-      deletedFiles: [],
-      headSha: 'parent',
+      changedPaths: ['a.ts'],
+      deletedPaths: [],
       headBranch: 'feat',
       message: 'Custom: fix stuff',
       pullNumber: 1,
       log: deps.logger,
     });
 
-    expect(createCommit).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Custom: fix stuff' })
-    );
+    const logOutput = execSync('git log --oneline -1 feat', {
+      cwd: repo.remoteDir,
+      encoding: 'utf-8',
+    });
+    expect(logOutput).toContain('Custom: fix stuff');
   });
 });
 
@@ -292,16 +303,14 @@ describe('generateCommitMessage', () => {
     const module = await getModule();
     const { generateCommitMessage } = module;
 
-    expect(generateCommitMessage('', [{ path: 'a.ts' }], [], 7)).toBe(
-      'Update PR #7: 1 modified/new file(s)'
-    );
+    expect(generateCommitMessage('', ['a.ts'], [], 7)).toBe('Update PR #7: 1 modified/new file(s)');
   });
 
   test('treats undefined as no message (generates default)', async () => {
     const module = await getModule();
     const { generateCommitMessage } = module;
 
-    expect(generateCommitMessage(undefined, [{ path: 'a.ts' }], [], 7)).toBe(
+    expect(generateCommitMessage(undefined, ['a.ts'], [], 7)).toBe(
       'Update PR #7: 1 modified/new file(s)'
     );
   });
@@ -310,7 +319,7 @@ describe('generateCommitMessage', () => {
     const module = await getModule();
     const { generateCommitMessage } = module;
 
-    const out = generateCommitMessage(undefined, [{ path: 'a' }, { path: 'b' }], [], 99);
+    const out = generateCommitMessage(undefined, ['a', 'b'], [], 99);
     expect(out).toBe('Update PR #99: 2 modified/new file(s)');
     expect(out).not.toContain('deleted');
   });
@@ -328,9 +337,9 @@ describe('generateCommitMessage', () => {
     const module = await getModule();
     const { generateCommitMessage } = module;
 
-    expect(
-      generateCommitMessage(undefined, [{ path: 'a' }, { path: 'b' }, { path: 'c' }], ['old'], 5)
-    ).toBe('Update PR #5: 3 modified/new file(s), 1 deleted file(s)');
+    expect(generateCommitMessage(undefined, ['a', 'b', 'c'], ['old'], 5)).toBe(
+      'Update PR #5: 3 modified/new file(s), 1 deleted file(s)'
+    );
   });
 
   test('both-empty case: produces trailing colon (preserves prior behavior)', async () => {
@@ -349,7 +358,7 @@ describe('buildDryRunReport', () => {
     headBranch: 'feat',
     baseBranch: 'main',
     prUrl: 'https://github.com/test-owner/test-repo/pull/42',
-    changedFiles: [] as { path: string }[],
+    changedFiles: [] as string[],
     deletedFiles: [] as string[],
   };
 
@@ -387,7 +396,7 @@ describe('buildDryRunReport', () => {
 
     const out = buildDryRunReport({
       ...baseInput,
-      changedFiles: [{ path: 'a.ts' }, { path: 'b.ts' }],
+      changedFiles: ['a.ts', 'b.ts'],
     });
     expect(textOf(out)).toContain('- Code changes:');
     expect(textOf(out)).toContain('  - 2 modified/new file(s)');
@@ -413,7 +422,7 @@ describe('buildDryRunReport', () => {
 
     const out = buildDryRunReport({
       ...baseInput,
-      changedFiles: [{ path: 'a.ts' }, { path: 'b.ts' }, { path: 'c.ts' }],
+      changedFiles: ['a.ts', 'b.ts', 'c.ts'],
       deletedFiles: ['old.ts', 'older.ts'],
     });
     expect(textOf(out)).toContain('  - 3 modified/new file(s)');

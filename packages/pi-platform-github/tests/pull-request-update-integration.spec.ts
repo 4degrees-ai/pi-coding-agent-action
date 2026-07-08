@@ -1,4 +1,8 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { execSync } from 'node:child_process';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-update' });
@@ -31,49 +35,6 @@ const mockPullsGet = mock(() =>
     },
   })
 );
-const mockGetTree = mock(() =>
-  Promise.resolve({
-    data: {
-      sha: 'tree-sha-123',
-      tree: [],
-    },
-  })
-);
-const mockCreateBlob = mock(() =>
-  Promise.resolve({
-    data: { sha: 'blob-sha-123' },
-  })
-);
-const mockCreateTree = mock(() =>
-  Promise.resolve({
-    data: { sha: 'new-tree-sha' },
-  })
-);
-const mockCreateCommit = mock(() =>
-  Promise.resolve({
-    data: { sha: 'commit-sha-123' },
-  })
-);
-const mockUpdateRef = mock(() =>
-  Promise.resolve({
-    data: { ref: 'refs/heads/feature-branch' },
-  })
-);
-const mockOctokit = {
-  rest: {
-    pulls: {
-      get: mockPullsGet,
-      update: mockPullsUpdate,
-    },
-    git: {
-      getTree: mockGetTree,
-      createBlob: mockCreateBlob,
-      createTree: mockCreateTree,
-      createCommit: mockCreateCommit,
-      updateRef: mockUpdateRef,
-    },
-  },
-};
 // octokit mock no longer needed - deps pattern
 
 // Setup default GitHub context
@@ -95,6 +56,15 @@ const mockContext = {
 mock.module('@actions/github', () => ({
   context: mockContext,
 }));
+
+const mockOctokit = {
+  rest: {
+    pulls: {
+      get: mockPullsGet,
+      update: mockPullsUpdate,
+    },
+  },
+};
 
 // Create a test CoreAdapter
 const testCoreAdapter = {
@@ -123,11 +93,30 @@ function createTestDeps(): GitHubModuleDeps {
       payload: mockContext.payload,
       serverUrl: mockContext.serverUrl,
       runId: mockContext.runId,
-      workspace: process.cwd(),
+      workspace: emptyWorkspace,
     },
     logger: testCoreAdapter,
   };
 }
+
+/**
+ * Create a clean git repo workspace so `git status --porcelain` works.
+ * The repo starts clean (no pending changes).
+ */
+let emptyWorkspace: string;
+
+beforeEach(() => {
+  emptyWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-pr-update-int-'));
+  // Initialise as a git repo with one commit so it has a clean working tree
+  execSync('git init', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git config user.name test', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git config user.email test@test', { cwd: emptyWorkspace, stdio: 'pipe' });
+  execSync('git commit --allow-empty -m init', { cwd: emptyWorkspace, stdio: 'pipe' });
+});
+
+afterEach(() => {
+  fs.rmSync(emptyWorkspace, { recursive: true, force: true });
+});
 
 // Cache the module after first import
 let pullRequestUpdateModule: any | null = null;
@@ -141,11 +130,6 @@ describe('updatePullRequest - integration tests', () => {
   beforeEach(async () => {
     mockPullsUpdate.mockClear();
     mockPullsGet.mockClear();
-    mockGetTree.mockClear();
-    mockCreateBlob.mockClear();
-    mockCreateTree.mockClear();
-    mockCreateCommit.mockClear();
-    mockUpdateRef.mockClear();
     // Reset to default context
     mockContext.issue = { number: 42 };
     mockContext.eventName = 'pull_request';
