@@ -32,7 +32,7 @@
     },
     "packages/pi-action": {
       "name": "@alexanderfortin/pi-action",
-      "version": "2.25.1",
+      "version": "2.26.0",
       "dependencies": {
         "@actions/core": "^3.0.1",
         "@actions/github": "^9.1.1",
@@ -49,7 +49,7 @@
     },
     "packages/pi-action-bridge": {
       "name": "@alexanderfortin/pi-action-bridge",
-      "version": "2.25.1",
+      "version": "2.26.0",
       "dependencies": {
         "@alexanderfortin/pi-platform-github": "workspace:*",
         "@octokit/core": "^7.0.6",
@@ -63,7 +63,7 @@
     },
     "packages/pi-cli": {
       "name": "@alexanderfortin/pi-cli",
-      "version": "2.25.1",
+      "version": "2.26.0",
       "bin": {
         "pi-cli": "./src/index.ts",
       },
@@ -81,7 +81,7 @@
     },
     "packages/pi-orchestrator": {
       "name": "@alexanderfortin/pi-orchestrator",
-      "version": "2.25.1",
+      "version": "2.26.0",
       "dependencies": {
         "@js-temporal/polyfill": "^0.5.1",
         "ignore": "^7.0.6",
@@ -95,7 +95,7 @@
     },
     "packages/pi-platform-github": {
       "name": "@alexanderfortin/pi-platform-github",
-      "version": "2.25.1",
+      "version": "2.26.0",
       "dependencies": {
         "@alexanderfortin/pi-orchestrator": "workspace:*",
         "@js-temporal/polyfill": "^0.5.1",

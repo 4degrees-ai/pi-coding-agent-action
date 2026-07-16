@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.26.0] - 2026-07-16
+
+### Added
+
+- adopt agent_settled event for session lifecycle; bump pi-coding-agent to 0.80.6 (#383)
+
+### Changed
+
+- document assignment triggers for issues and PRs (#385)
+- replace Git Data API with git CLI for Forgejo compatibility (#377)
+- **deps**: update dependencies (#372)
+- **deps**: update dependencies, Pi to v0.80.7 (#387)
+
+### Fixed
+
+- **release**: sync bun.lock workspace versions via targeted script (#373)
+- use platform-aware noreply email for git commit identity (#382)
+- use repos.getBranch instead of git.getRef for Forgejo compatibility (#375)
+
 ## [2.25.1] - 2026-07-07
 
 ### Changed
@@ -598,7 +617,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README link corrections
 - Codecov action updated, removed double build
 
-[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.25.1...HEAD
+[unreleased]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.26.0...HEAD
+[2.26.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.25.1...v2.26.0
 [2.25.1]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.25.0...v2.25.1
 [2.25.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.24.0...v2.25.0
 [2.24.0]: https://github.com/shaftoe/pi-coding-agent-action/compare/v2.23.0...v2.24.0
