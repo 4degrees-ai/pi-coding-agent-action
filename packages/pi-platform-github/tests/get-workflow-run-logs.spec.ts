@@ -5,7 +5,7 @@
  * log downloading, truncation, byte budget management, and output formatting.
  */
 
-import { describe, expect, test, mock, beforeEach, beforeAll } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, beforeAll } from 'vitest';
 import {
   setupGitHubTestEnv,
   createTestDeps,
@@ -16,13 +16,13 @@ setupGitHubTestEnv({ envPathPrefix: 'gh-event-logs' });
 const mockDebug = coreMock.debug;
 
 // Mock octokit
-const mockListJobsForWorkflowRun = mock(() =>
+const mockListJobsForWorkflowRun = vi.fn(() =>
   Promise.resolve({
     data: { jobs: [] as any[] },
   })
 );
 
-const mockDownloadJobLogs = mock(() => Promise.resolve({ data: '' as any }));
+const mockDownloadJobLogs = vi.fn(() => Promise.resolve({ data: '' as any }));
 
 const mockOctokit = {
   rest: {

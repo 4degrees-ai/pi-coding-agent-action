@@ -1,18 +1,19 @@
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach } from 'vitest';
 
 import { setupGitHubTestEnv } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-pr-logic' });
 
 const noop = (): void => {};
-const mockGetInput = mock((name: string) => {
+const mockGetInput = vi.fn((name: string) => {
   if (name === 'github_token') {
     return 'fake-token';
   }
   return '';
 });
 
-// Mock octokit
-const mockReposGet = mock(() => Promise.resolve({ data: { default_branch: 'develop' } }));
+// Mock octokit — injected directly via createTestDeps() (dependency injection),
+// so no vi.mock() is needed for an octokit factory.
+const mockReposGet = vi.fn(() => Promise.resolve({ data: { default_branch: 'develop' } }));
 const mockOctokit = {
   rest: {
     repos: {
@@ -20,9 +21,6 @@ const mockOctokit = {
     },
   },
 };
-mock.module('../../../src/platform/github/octokit', () => ({
-  getOctokit: mock(() => mockOctokit),
-}));
 
 // Setup default GitHub context
 const mockContext = {
@@ -44,7 +42,7 @@ const mockContext = {
 };
 
 // Mock @actions/github context
-mock.module('@actions/github', () => ({
+vi.mock('@actions/github', () => ({
   context: mockContext,
 }));
 

@@ -5,7 +5,7 @@
  * the `simple-git` based helpers behave correctly end-to-end.
  */
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -23,7 +23,7 @@ import {
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
 import type { SimpleGit } from 'simple-git';
 import { simpleGit } from 'simple-git';
-import { setupGitRepo, cleanupGitRepo } from '../helpers/git-repo';
+import { setupGitRepo, cleanupGitRepo, isolateGitConfig } from '../helpers/git-repo';
 
 /** Create a logger that captures messages for assertions. */
 function captureLogger() {
@@ -59,6 +59,10 @@ function createDeps(actor?: string): { deps: GitHubModuleDeps; messages: string[
     messages,
   };
 }
+
+// Isolate every git operation in this file from the host's global/system git
+// config (see `isolateGitConfig` in helpers/git-repo.ts for rationale).
+isolateGitConfig();
 
 // ---------------------------------------------------------------------------
 // getNoreplyEmail

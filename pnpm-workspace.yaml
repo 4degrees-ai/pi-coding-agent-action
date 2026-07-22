@@ -1,0 +1,30 @@
+packages:
+  - 'packages/*'
+
+# Allow these dependencies to run their install-time build scripts.
+# pnpm v10+ blocks postinstall scripts by default; this allowlist approves
+# the ones we need (configured in pnpm-workspace.yaml — pnpm v11 ignores a
+# `pnpm` field in package.json and warns).
+#   esbuild       — fetches its platform binary (required by `pnpm run package`)
+#   @google/genai — protobuf runtime codegen postinstall
+#   protobufjs    — minified pbjs/pbts bundle postinstall
+allowBuilds:
+  esbuild: true
+  '@google/genai': true
+  protobufjs: true
+
+# pnpm v11 enables a 24h supply-chain "minimum release age" cooldown by default
+# (minimumReleaseAge: 1440), refusing to install packages published less than
+# 24h ago — including on `--frozen-lockfile`, which is what CI runs. The
+# first-party Pi SDK packages under `@earendil-works/` are bumped frequently
+# (often within hours of release, via renovate) and are trusted (this
+# project's own org), so we exempt the whole scope.
+#
+# IMPORTANT: the glob `@earendil-works/*` is used deliberately. pnpm v11's
+# lockfile policy verification honours glob patterns but NOT the bare
+# `@scope/` trailing-slash form (which only matches at resolution time, not
+# during frozen-lockfile verification). Pinning `@pkg@x.y.z` works too but
+# would silently re-break CI on the next Pi version bump — the glob survives
+# version churn with no maintenance. Third-party packages keep the cooldown.
+minimumReleaseAgeExclude:
+  - '@earendil-works/*'

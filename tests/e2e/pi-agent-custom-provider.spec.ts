@@ -27,13 +27,13 @@
  *     E2E_TOKEN_CUSTOM=sk-or-... \
  *     E2E_PROVIDER_CUSTOM=openrouter \
  *     E2E_MODEL_CUSTOM=liquid/lfm-2.5-1.2b-instruct:free \
- *     bun test tests/e2e/pi-agent-custom-provider.spec.ts
+ *     pnpm test tests/e2e/pi-agent-custom-provider.spec.ts
  *
  * When RUN_E2E_TESTS is not set or env vars are missing, every test is
  * reported as **skip** (not pass).
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { resolve } from 'node:path';
 import {
   E2E_TIMEOUT,
@@ -55,9 +55,9 @@ const {
   provider: E2E_PROVIDER,
   model: E2E_MODEL,
 } = readE2EEnvVars({
-  token: Bun.env.E2E_TOKEN_CUSTOM ?? '',
-  provider: Bun.env.E2E_PROVIDER_CUSTOM ?? '',
-  model: Bun.env.E2E_MODEL_CUSTOM ?? '',
+  token: process.env.E2E_TOKEN_CUSTOM ?? '',
+  provider: process.env.E2E_PROVIDER_CUSTOM ?? '',
+  model: process.env.E2E_MODEL_CUSTOM ?? '',
 });
 
 const canRun = isE2EEnabled({ token: E2E_TOKEN, provider: E2E_PROVIDER, model: E2E_MODEL });

@@ -4,7 +4,7 @@
  * Covers the end-to-end flow of creating a pull request via the GitHub API.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -14,14 +14,17 @@ import {
   generatePullRequestBody,
 } from '@alexanderfortin/pi-platform-github';
 import type { GitHubModuleDeps } from '@alexanderfortin/pi-platform-github';
-import { setupGitRepo, cleanupGitRepo } from './helpers/git-repo';
+import { setupGitRepo, cleanupGitRepo, isolateGitConfig } from './helpers/git-repo';
+
+// Isolate git ops from the host's global/system config (see isolateGitConfig).
+isolateGitConfig();
 
 function createPRDeps(): GitHubModuleDeps {
   return {
     octokit: {
       rest: {
         pulls: {
-          create: mock(() =>
+          create: vi.fn(() =>
             Promise.resolve({
               data: {
                 number: 99,
@@ -33,8 +36,8 @@ function createPRDeps(): GitHubModuleDeps {
           ),
         },
         repos: {
-          get: mock(() => Promise.resolve({ data: { default_branch: 'develop' } })),
-          getBranch: mock(() => Promise.resolve({ data: { commit: { sha: 'base-sha-123' } } })),
+          get: vi.fn(() => Promise.resolve({ data: { default_branch: 'develop' } })),
+          getBranch: vi.fn(() => Promise.resolve({ data: { commit: { sha: 'base-sha-123' } } })),
         },
       },
     } as any,
@@ -50,11 +53,11 @@ function createPRDeps(): GitHubModuleDeps {
       workspace: '/tmp',
     },
     logger: {
-      debug: mock(() => {}),
-      info: mock(() => {}),
-      warning: mock(() => {}),
-      notice: mock(() => {}),
-      error: mock(() => {}),
+      debug: vi.fn(() => {}),
+      info: vi.fn(() => {}),
+      warning: vi.fn(() => {}),
+      notice: vi.fn(() => {}),
+      error: vi.fn(() => {}),
     },
   };
 }
@@ -213,14 +216,14 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
   // has push access), but pulls.create fails (token lacks
   // pull-requests:write). The tool should return a compare-URL fallback
   // instead of throwing.
-  function createFallbackDeps(workspace: string, pullsCreateImpl?: ReturnType<typeof mock>) {
+  function createFallbackDeps(workspace: string, pullsCreateImpl?: ReturnType<typeof vi.fn>) {
     return {
       octokit: {
         rest: {
           pulls: {
             create:
               pullsCreateImpl ??
-              mock(() =>
+              vi.fn(() =>
                 Promise.reject(
                   Object.assign(new Error("Forbidden: Can't read pulls"), { status: 403 })
                 )
@@ -239,11 +242,11 @@ describe('createPullRequest — fallback when pulls.create fails', () => {
         workspace,
       },
       logger: {
-        debug: mock(() => {}),
-        info: mock(() => {}),
-        warning: mock(() => {}),
-        notice: mock(() => {}),
-        error: mock(() => {}),
+        debug: vi.fn(() => {}),
+        info: vi.fn(() => {}),
+        warning: vi.fn(() => {}),
+        notice: vi.fn(() => {}),
+        error: vi.fn(() => {}),
       },
     } as unknown as GitHubModuleDeps;
   }
@@ -323,7 +326,7 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
   // fallback. Other statuses (422 already-exists, 5xx transient) must
   // propagate so the agent can react appropriately instead of being
   // silently masked as partial success.
-  function createReThrowDeps(workspace: string, pullsCreateImpl: ReturnType<typeof mock>) {
+  function createReThrowDeps(workspace: string, pullsCreateImpl: ReturnType<typeof vi.fn>) {
     return {
       octokit: {
         rest: {
@@ -341,11 +344,11 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
         workspace,
       },
       logger: {
-        debug: mock(() => {}),
-        info: mock(() => {}),
-        warning: mock(() => {}),
-        notice: mock(() => {}),
-        error: mock(() => {}),
+        debug: vi.fn(() => {}),
+        info: vi.fn(() => {}),
+        warning: vi.fn(() => {}),
+        notice: vi.fn(() => {}),
+        error: vi.fn(() => {}),
       },
     } as unknown as GitHubModuleDeps;
   }
@@ -371,7 +374,7 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     }
     const deps = createReThrowDeps(
       repo.workspace,
-      mock(() =>
+      vi.fn(() =>
         Promise.reject(
           Object.assign(new Error('Validation Failed: A pull request already exists'), {
             status: 422,
@@ -390,7 +393,9 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     }
     const deps = createReThrowDeps(
       repo.workspace,
-      mock(() => Promise.reject(Object.assign(new Error('Internal Server Error'), { status: 500 })))
+      vi.fn(() =>
+        Promise.reject(Object.assign(new Error('Internal Server Error'), { status: 500 }))
+      )
     );
     await expect(createPullRequest(deps, { title: 'Fix bug' })).rejects.toThrow(
       /Failed to create pull request/
@@ -403,7 +408,7 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     }
     const deps = createReThrowDeps(
       repo.workspace,
-      mock(() => Promise.reject(new Error('network timeout')))
+      vi.fn(() => Promise.reject(new Error('network timeout')))
     );
     await expect(createPullRequest(deps, { title: 'Fix bug' })).rejects.toThrow(
       /Failed to create pull request/
@@ -416,7 +421,7 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     }
     const deps = createReThrowDeps(
       repo.workspace,
-      mock(() =>
+      vi.fn(() =>
         Promise.reject(Object.assign(new Error('Requires authentication'), { status: 401 }))
       )
     );
@@ -436,7 +441,7 @@ describe('createPullRequest — non-permission errors are re-thrown', () => {
     // back to the compare URL rather than being re-thrown.
     const deps = createReThrowDeps(
       repo.workspace,
-      mock(() =>
+      vi.fn(() =>
         Promise.reject(
           Object.assign(new Error("Can't read pulls or can't read UnitTypeCode"), {
             status: 404,

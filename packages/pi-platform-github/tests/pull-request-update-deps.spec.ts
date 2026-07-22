@@ -4,11 +4,12 @@
  * Covers the end-to-end flow of updating a pull request via the GitHub API.
  */
 
-import { describe, expect, test, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
+import { isolateGitConfig } from './helpers/git-repo';
 import {
   updatePullRequest,
   validateUpdatePullRequestParams,
@@ -20,7 +21,7 @@ function createUpdateDeps(): GitHubModuleDeps {
     octokit: {
       rest: {
         pulls: {
-          get: mock(() =>
+          get: vi.fn(() =>
             Promise.resolve({
               data: {
                 number: 42,
@@ -31,7 +32,7 @@ function createUpdateDeps(): GitHubModuleDeps {
               status: 200,
             })
           ),
-          update: mock(() =>
+          update: vi.fn(() =>
             Promise.resolve({
               data: { number: 42 },
               status: 200,
@@ -50,14 +51,17 @@ function createUpdateDeps(): GitHubModuleDeps {
       workspace: emptyWorkspace,
     },
     logger: {
-      debug: mock(() => {}),
-      info: mock(() => {}),
-      warning: mock(() => {}),
-      notice: mock(() => {}),
-      error: mock(() => {}),
+      debug: vi.fn(() => {}),
+      info: vi.fn(() => {}),
+      warning: vi.fn(() => {}),
+      notice: vi.fn(() => {}),
+      error: vi.fn(() => {}),
     },
   };
 }
+
+// Isolate git ops from the host's global/system config (see isolateGitConfig).
+isolateGitConfig();
 
 /**
  * Create a clean git repo workspace so `git status --porcelain` works.

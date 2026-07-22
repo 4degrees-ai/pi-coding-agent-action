@@ -5,19 +5,19 @@
  * check run fetching, workflow run fetching, filtering, and summary formatting.
  */
 
-import { describe, expect, test, mock, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { setupGitHubTestEnv, createTestDeps, coreMock } from './helpers/github-test-env';
 setupGitHubTestEnv({ envPathPrefix: 'gh-event-ci' });
 const mockDebug = coreMock.debug;
 
 // Mock octokit
-const mockPullsGet = mock(() =>
+const mockPullsGet = vi.fn(() =>
   Promise.resolve({
     data: { head: { sha: 'pr-head-sha-abcdef' } },
   })
 );
 
-const mockChecksListForRef = mock(() =>
+const mockChecksListForRef = vi.fn(() =>
   Promise.resolve({
     data: {
       check_runs: [] as any[],
@@ -25,7 +25,7 @@ const mockChecksListForRef = mock(() =>
   })
 );
 
-const mockListWorkflowRuns = mock(() =>
+const mockListWorkflowRuns = vi.fn(() =>
   Promise.resolve({
     data: {
       workflow_runs: [] as any[],
