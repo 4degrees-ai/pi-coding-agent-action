@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { build, type Plugin } from 'esbuild';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolvePiSdkPackagePath } from './pi-sdk';
 
 // Pure version/provenance helpers live in `./version` so they can be shared
 // with the CI dist-rebuild scripts (and unit-tested) without pulling in esbuild.
@@ -127,22 +128,8 @@ export async function buildDist(cwd: string = process.cwd()): Promise<void> {
   const baseVersion = readJsonVersion(join(cwd, 'package.json'));
   const version = composeActionVersion(baseVersion);
 
-  // Resolve Pi SDK path dynamically. We can't use `require.resolve('.../package.json')`
-  // because the Pi SDK's `exports` map doesn't expose it (and pnpm enforces
-  // `exports` strictly). The package also only has an `import` export
-  // condition (no `require`), so CJS require.resolve fails entirely. We use
-  // `import.meta.resolve` (ESM) which honours the `import` condition, then
-  // walk up to the nearest package.json.
-  const piMainUrl = import.meta.resolve('@earendil-works/pi-coding-agent');
-  let piDir = dirname(fileURLToPath(piMainUrl));
-  while (!existsSync(join(piDir, 'package.json'))) {
-    const parent = dirname(piDir);
-    if (parent === piDir) {
-      throw new Error('Could not locate @earendil-works/pi-coding-agent/package.json');
-    }
-    piDir = parent;
-  }
-  const piPkgPath = join(piDir, 'package.json');
+  // Resolve the Pi SDK package.json via the shared helper (see pi-sdk.ts).
+  const piPkgPath = resolvePiSdkPackagePath();
   const piVersion = readJsonVersion(piPkgPath);
 
   const branch = process.env.GITHUB_REF_NAME ?? 'unknown';

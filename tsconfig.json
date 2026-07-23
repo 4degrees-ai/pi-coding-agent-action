@@ -9,7 +9,8 @@
     "packages/*/tests/**/*.ts",
     "packages/*/scripts/**/*.ts",
     "tests/**/*.ts",
-    "scripts/**/*.ts"
+    "scripts/**/*.ts",
+    "scripts/**/*.mts"
   ],
   "exclude": ["node_modules", "dist"]
 }

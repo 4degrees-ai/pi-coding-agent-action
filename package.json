@@ -6,7 +6,7 @@
   "scripts": {
     "package": "tsx packages/pi-action/scripts/package.ts",
     "dist-version": "tsx scripts/dist-version.ts",
-    "dist-commit-msg": "tsx scripts/dist-commit-msg.ts",
+    "dist-commit-msg": "tsx scripts/dist-commit-msg.mts",
     "pi-cli": "tsx packages/pi-cli/src/index.ts",
     "prepare": "pnpm run package",
     "test": "vitest run",
