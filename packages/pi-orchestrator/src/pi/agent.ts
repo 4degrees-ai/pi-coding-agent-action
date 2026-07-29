@@ -36,6 +36,22 @@ import type {
 import type { PlatformProvider } from '../platform';
 
 /**
+ * Derive retry-event payload types from the SDK's `AgentSessionEvent` union so
+ * the handler signatures stay a single source of truth — if the SDK ever changes
+ * a payload field, the compiler catches the drift here rather than in two places.
+ */
+type AutoRetryStartEvent = Extract<AgentSessionEvent, { type: 'auto_retry_start' }>;
+type AutoRetryEndEvent = Extract<AgentSessionEvent, { type: 'auto_retry_end' }>;
+type SummarizationRetryScheduledEvent = Extract<
+  AgentSessionEvent,
+  { type: 'summarization_retry_scheduled' }
+>;
+type SummarizationRetryAttemptStartEvent = Extract<
+  AgentSessionEvent,
+  { type: 'summarization_retry_attempt_start' }
+>;
+
+/**
  * Pi coding agent for headless execution inside GitHub Actions.
  *
  * Wraps model resolution, authentication, agent session lifecycle, and prompt
@@ -262,6 +278,15 @@ export class Agent {
     }
 
     this.sessionEventHandler = (event: AgentSessionEvent) => {
+      // Route all retry-related events (auto_retry_*, summarization_retry_*) to
+      // a dedicated sub-handler. Checked up-front via a string guard rather
+      // than individual `case` labels to keep this dispatcher's cyclomatic
+      // complexity low — the SDK may add further `*_retry_*` variants and they
+      // all belong to the same retry sub-tree.
+      if (event.type.includes('retry')) {
+        this.handleRetryEvent(event);
+        return;
+      }
       switch (event.type) {
         case 'message_update':
           this.handleMessageUpdate(event.assistantMessageEvent);
@@ -414,6 +439,129 @@ export class Agent {
         break;
       }
     }
+  }
+
+  /**
+   * Dispatch retry-related session events (`auto_retry_*`, `summarization_retry_*`)
+   * to their dedicated handlers.
+   *
+   * Extracted from the main {@link sessionEventHandler} switch so the primary
+   * dispatcher stays lean and the retry sub-tree is self-contained.
+   *
+   * @param event - A retry-related `AgentSessionEvent`.
+   * @private
+   */
+  private handleRetryEvent(event: AgentSessionEvent): void {
+    switch (event.type) {
+      case 'auto_retry_start':
+        this.handleAutoRetryStart(event);
+        break;
+      case 'auto_retry_end':
+        this.handleAutoRetryEnd(event);
+        break;
+      case 'summarization_retry_scheduled':
+        this.handleSummarizationRetryScheduled(event);
+        break;
+      case 'summarization_retry_attempt_start':
+        this.handleSummarizationRetryAttemptStart(event);
+        break;
+      case 'summarization_retry_finished':
+        this.handleSummarizationRetryFinished();
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Handle `auto_retry_start` session events.
+   *
+   * Pi auto-retries transient provider failures (network/DNS errors, 5xx,
+   * rate limits, early stream endings) per the configured retry policy. Each
+   * retry adds latency and token cost, so surface the start so operators can
+   * correlate slow/expensive runs. This event arrives on the raw session
+   * stream (not the `ExtensionAPI` `pi.on()` surface).
+   *
+   * @param event - The auto-retry-start payload.
+   * @private
+   */
+  private handleAutoRetryStart(event: AutoRetryStartEvent): void {
+    this.logger.info(
+      `[auto-retry] 🔄 provider call retrying — attempt ${event.attempt}/${event.maxAttempts} ` +
+        `after ${event.delayMs}ms (last error: ${event.errorMessage})`
+    );
+  }
+
+  /**
+   * Handle `auto_retry_end` session events.
+   *
+   * Fires when the auto-retry loop settles. Log recovery at info and
+   * exhaustion at warning — a failed retry loop usually precedes a
+   * session-level error that {@link handleAgentEnd} captures, but the
+   * warning makes the exhaustion visible in isolation too.
+   *
+   * @param event - The auto-retry-end payload.
+   * @private
+   */
+  private handleAutoRetryEnd(event: AutoRetryEndEvent): void {
+    if (event.success) {
+      this.logger.info(`[auto-retry] ✅ recovered on attempt ${event.attempt}`);
+    } else {
+      const detail = event.finalError ? `: ${event.finalError}` : '';
+      this.logger.warning(`[auto-retry] ❌ exhausted after attempt ${event.attempt}${detail}`);
+    }
+  }
+
+  /**
+   * Handle `summarization_retry_scheduled` session events.
+   *
+   * Fires when an auto-compaction's summary generation itself retries (the
+   * summarisation LLM call hit a transient failure). Mirrors `auto_retry_start`
+   * but for the compaction/branch-summary sub-flow, so operators have full
+   * retry visibility — without this, compaction-summary retries are invisible
+   * even though provider-call retries are logged.
+   *
+   * @param event - The summarization-retry-scheduled payload.
+   * @private
+   */
+  private handleSummarizationRetryScheduled(event: SummarizationRetryScheduledEvent): void {
+    this.logger.info(
+      `[summarization-retry] 🔄 summary generation retrying — attempt ` +
+        `${event.attempt}/${event.maxAttempts} after ${event.delayMs}ms ` +
+        `(last error: ${event.errorMessage})`
+    );
+  }
+
+  /**
+   * Handle `summarization_retry_attempt_start` session events.
+   *
+   * Fires at the start of each summarisation retry attempt. The `source`
+   * discriminates whether the summary being retried is a branch summary
+   * (tree navigation) or a compaction summary (context threshold/overflow).
+   * Logged at debug to avoid noise — the scheduled/finished pair already
+   * brackets the retry loop at info level.
+   *
+   * @param event - The summarization-retry-attempt-start payload.
+   * @private
+   */
+  private handleSummarizationRetryAttemptStart(event: SummarizationRetryAttemptStartEvent): void {
+    const reason = event.source === 'compaction' ? `compaction (${event.reason})` : 'branchSummary';
+    this.logger.debug(`[summarization-retry] ▶️ starting ${reason} summary attempt`);
+  }
+
+  /**
+   * Handle `summarization_retry_finished` session events.
+   *
+   * Fires when the summarisation retry loop settles. The SDK does not carry a
+   * success/error field on this event, so we log a neutral marker — not a
+   * green checkmark — to avoid implying recovery. Paired with
+   * {@link handleSummarizationRetryScheduled} this brackets the loop so
+   * operators can see it began and ended.
+   *
+   * @private
+   */
+  private handleSummarizationRetryFinished(): void {
+    this.logger.info(`[summarization-retry] • summary retry loop finished`);
   }
 
   /**

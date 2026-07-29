@@ -20,6 +20,11 @@ import type {
 import { createOctokitReadThread, DEFAULT_MAX_THREAD_COMMENTS } from '../octokit';
 import type { NormalizedThread, ReadPrThreadDetails, ReadThreadFn } from '../types';
 import { ownerField, prNumberField, repoField, resolveServerUrl, serverUrlField } from './common';
+import {
+  nullable,
+  PREFER_STRICT_JSON_SCHEMA,
+} from '@alexanderfortin/pi-orchestrator/pi/tools/schema';
+import { isPresent } from '@alexanderfortin/pi-orchestrator/pi/tools/tool-execution';
 
 /** Per-comment body cap in the text summary (full bodies stay in `details`). */
 const MAX_COMMENT_BODY_CHARS = 2000;
@@ -117,19 +122,22 @@ function truncate(text: string, max: number): string {
   return `${text.slice(0, max)}\n… (truncated; full body in tool details)`;
 }
 
-const paramsSchema = Type.Object({
-  owner: ownerField,
-  repo: repoField,
-  number: prNumberField('Pull request (or issue) number to read.'),
-  max_comments: Type.Optional(
-    Type.Integer({
-      minimum: 1,
-      maximum: 100,
-      description: `Maximum comments to return (default ${DEFAULT_MAX_THREAD_COMMENTS}).`,
-    })
-  ),
-  server_url: serverUrlField,
-});
+const paramsSchema = Type.Object(
+  {
+    owner: ownerField,
+    repo: repoField,
+    number: prNumberField('Pull request (or issue) number to read.'),
+    max_comments: nullable(
+      Type.Integer({
+        minimum: 1,
+        maximum: 100,
+        description: `Maximum comments to return (default ${DEFAULT_MAX_THREAD_COMMENTS}).`,
+      })
+    ),
+    server_url: serverUrlField,
+  },
+  { additionalProperties: false }
+);
 
 /**
  * The `read_pr_thread` tool definition.
@@ -150,14 +158,15 @@ export const readPrThreadTool: ToolDefinition<typeof paramsSchema, ReadPrThreadD
     'The last comment whose body starts with `/pi 🤖 Handoff` is the most recent handoff; summarise its Done/Next sections.',
   ],
   parameters: paramsSchema,
+  constrainedSampling: PREFER_STRICT_JSON_SCHEMA,
   async execute(
     _toolCallId: string,
     params: {
       owner: string;
       repo: string;
       number: number;
-      max_comments?: number;
-      server_url?: string;
+      max_comments: number | null;
+      server_url: string | null;
     },
     signal: AbortSignal | undefined,
     _onUpdate: AgentToolUpdateCallback<ReadPrThreadDetails> | undefined,
@@ -170,7 +179,7 @@ export const readPrThreadTool: ToolDefinition<typeof paramsSchema, ReadPrThreadD
         owner: params.owner,
         repo: params.repo,
         number: params.number,
-        ...(params.max_comments !== undefined ? { maxComments: params.max_comments } : {}),
+        ...(isPresent(params.max_comments) ? { maxComments: params.max_comments } : {}),
       },
       signal
     );
