@@ -11,7 +11,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { DefaultResourceLoader } from '@earendil-works/pi-coding-agent';
+import {
+  createAssistantMessageEventStream,
+  type AssistantMessage,
+  type Context,
+} from '@earendil-works/pi-ai';
+import { DefaultResourceLoader, ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { createMockProvider } from '../helpers/tool-mocks';
 import {
   WORKSPACE_BOUNDARY_VIOLATION_CODE,
@@ -171,5 +176,74 @@ describe('workspace-read-only Agent startup', () => {
     });
 
     agent.dispose();
+  });
+
+  test('Agent.run rejects after the SDK converts a boundary throw into a tool result', async () => {
+    const requests: Context[] = [];
+    const stream = vi
+      .spyOn(ModelRuntime.prototype, 'streamSimple')
+      .mockImplementation((_model, context) => {
+        requests.push(context);
+        const response = createAssistantMessageEventStream();
+        const message: AssistantMessage = {
+          role: 'assistant',
+          api: 'anthropic-messages',
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5',
+          content:
+            requests.length === 1
+              ? [
+                  {
+                    type: 'toolCall',
+                    id: 'boundary-tool-call',
+                    name: 'read',
+                    arguments: { path: '/proc/self/environ' },
+                  },
+                ]
+              : [{ type: 'text', text: 'The read was blocked.' }],
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: requests.length === 1 ? 'toolUse' : 'stop',
+          timestamp: Date.now(),
+        };
+        response.push({
+          type: 'done',
+          reason: requests.length === 1 ? 'toolUse' : 'stop',
+          message,
+        });
+        return response;
+      });
+
+    const agent = new Agent(core as any, createMockProvider(), {
+      ...hardenedConfig(),
+      token: 'test-token',
+    });
+    await agent.ready();
+
+    try {
+      await expect(agent.run('Read /proc/self/environ')).rejects.toMatchObject({
+        code: WORKSPACE_BOUNDARY_VIOLATION_CODE,
+      });
+    } finally {
+      agent.dispose();
+    }
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(requests[1]?.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'toolResult',
+          toolCallId: 'boundary-tool-call',
+          toolName: 'read',
+          isError: true,
+        }),
+      ])
+    );
   });
 });
