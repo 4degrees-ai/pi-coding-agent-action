@@ -36,6 +36,9 @@ export const MISSING_MODEL_MESSAGE =
   'Set it to the desired model (e.g. "claude-sonnet-4-5", "gpt-4o"). ' +
   'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.';
 
+const WORKSPACE_READ_ONLY_MODE = 'workspace-read-only';
+const WORKSPACE_READ_ONLY_TOOLS = ['read', 'grep', 'find', 'ls'] as const;
+
 // ---------------------------------------------------------------------------
 // Parsing helpers (pure functions)
 // ---------------------------------------------------------------------------
@@ -126,6 +129,54 @@ export function validateRequiredInputs(provider: string, model: string): void {
   }
 }
 
+function validateWorkspaceReadOnlyInputs(
+  isolationMode: string,
+  extensions: string[] | undefined,
+  loadBuiltinExtensions: boolean,
+  loadedTools: string[] | undefined,
+  exportSessionHtml: boolean,
+  exportSessionJsonl: boolean,
+  shareSession: boolean
+): void {
+  if (!isolationMode) {
+    return;
+  }
+
+  if (isolationMode !== WORKSPACE_READ_ONLY_MODE) {
+    throw new Error(
+      `Unsupported isolation_mode "${isolationMode}". ` +
+        `Only "${WORKSPACE_READ_ONLY_MODE}" is supported.`
+    );
+  }
+
+  if (extensions?.length) {
+    throw new Error(`extensions cannot be used with isolation_mode ${WORKSPACE_READ_ONLY_MODE}`);
+  }
+
+  if (loadBuiltinExtensions) {
+    throw new Error(
+      `load_builtin_extensions must be false with isolation_mode ${WORKSPACE_READ_ONLY_MODE}`
+    );
+  }
+
+  const expectedTools = new Set<string>(WORKSPACE_READ_ONLY_TOOLS);
+  const requestedTools = loadedTools ? new Set(loadedTools) : undefined;
+  const exactToolSet =
+    requestedTools?.size === expectedTools.size &&
+    [...expectedTools].every(toolName => requestedTools.has(toolName));
+  if (!exactToolSet) {
+    throw new Error(
+      `loaded_tools must contain exactly read, grep, find, and ls with isolation_mode ${WORKSPACE_READ_ONLY_MODE}`
+    );
+  }
+
+  if (exportSessionHtml || exportSessionJsonl || shareSession) {
+    throw new Error(
+      `session exports and sharing are disabled with isolation_mode ${WORKSPACE_READ_ONLY_MODE}`
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -156,6 +207,7 @@ export function gatherActionsConfig(): PiConfig {
   const promptInput = core.getInput('prompt');
   const thinkingLevel = core.getInput('thinking_level') ?? 'off';
   const baseUrl = core.getInput('base_url') || undefined;
+  const isolationMode = core.getInput('isolation_mode').trim();
 
   // --- Optional list inputs ----------------------------------------------
   const extensions = parseStringListInput(core.getInput('extensions'), '\n');
@@ -168,6 +220,16 @@ export function gatherActionsConfig(): PiConfig {
   const exportSessionJsonl = parseBooleanInput(core.getInput('export_session_jsonl'), false);
   const autoCompaction = parseBooleanInput(core.getInput('auto_compaction'), false);
   const shareSession = parseBooleanInput(core.getInput('share_session'), false);
+
+  validateWorkspaceReadOnlyInputs(
+    isolationMode,
+    extensions,
+    loadBuiltinExtensions,
+    loadedTools,
+    exportSessionHtml,
+    exportSessionJsonl,
+    shareSession
+  );
 
   // --- Session sharing storage backend inputs ---------------------------
   const shareGistProviderRaw = core.getInput('share_gist_provider').trim().toLowerCase();
@@ -213,6 +275,7 @@ export function gatherActionsConfig(): PiConfig {
     token,
     thinkingLevel,
     promptInput,
+    ...(isolationMode ? { isolationMode: isolationMode as 'workspace-read-only' } : {}),
     ...(extensions?.length ? { extensions } : {}),
     loadBuiltinExtensions,
     ...(loadedTools ? { loadedTools } : {}),

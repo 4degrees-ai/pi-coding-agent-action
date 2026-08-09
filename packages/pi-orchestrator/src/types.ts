@@ -215,6 +215,8 @@ export interface PiConfig extends DiffConfig {
   token: string;
   thinkingLevel: string;
   promptInput: string;
+  /** Optional hardened execution mode for untrusted review prompts. */
+  isolationMode?: 'workspace-read-only';
   extensions?: string[];
   loadBuiltinExtensions?: boolean;
   /**

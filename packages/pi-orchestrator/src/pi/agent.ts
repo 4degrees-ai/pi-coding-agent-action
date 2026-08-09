@@ -18,11 +18,27 @@ import {
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent';
-import { clampThinkingLevel, getSupportedThinkingLevels } from '@earendil-works/pi-ai';
+import {
+  InMemoryCredentialStore,
+  clampThinkingLevel,
+  getSupportedThinkingLevels,
+} from '@earendil-works/pi-ai';
 import { buildResourceLoaderOptions } from './resource-loader';
+import { getSystemPrompt } from './prompt';
+import {
+  createWorkspaceBoundaryTracker,
+  createWorkspaceReadOnlyResourceLoader,
+  createWorkspaceReadOnlyTools,
+  validateWorkspaceRoot,
+  WORKSPACE_READ_ONLY_TOOL_NAMES,
+} from './workspace-read-only';
 import { getPiVersion } from '../version';
 
-import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
+import type {
+  AgentSession,
+  AgentSessionEvent,
+  AgentSessionServices,
+} from '@earendil-works/pi-coding-agent';
 import type { Api, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type {
@@ -78,6 +94,7 @@ export class Agent {
   private platformProvider: PlatformProvider;
   private config: PiConfig;
   private events: AgentEvents;
+  private workspaceBoundaryTracker = createWorkspaceBoundaryTracker();
   /**
    * Error captured from the most recent `agent_end` event. Set when the
    * last assistant message in the event has `stopReason === 'error'`,
@@ -138,22 +155,28 @@ export class Agent {
    */
   // fallow-ignore-next-line complexity
   async ready(): Promise<Agent> {
-    const loaderConfig: ResourceLoaderConfig = this.config;
-    const resourceLoaderOptions = await buildResourceLoaderOptions(
-      this.logger,
-      this.platformProvider,
-      loaderConfig
-    );
-
     const cwd = this.config.cwd ?? process.cwd();
+    const hardened = this.config.isolationMode === 'workspace-read-only';
+    const workspaceRoot = hardened
+      ? validateWorkspaceRoot(process.env.GITHUB_WORKSPACE, cwd)
+      : undefined;
 
-    const settingsManager = SettingsManager.create(cwd);
+    if (hardened) {
+      this.validateWorkspaceReadOnlyConfig();
+    }
+
+    const settingsManager = hardened ? SettingsManager.inMemory() : SettingsManager.create(cwd);
 
     // Create and configure the model runtime (replaces the legacy
     // AuthStorage + ModelRegistry pair). ModelRuntime.create() is async
     // (it refreshes the model catalog), so initialisation happens here in
     // ready() rather than in the constructor.
-    this.modelRuntime = await ModelRuntime.create();
+    this.modelRuntime = hardened
+      ? await ModelRuntime.create({
+          credentials: new InMemoryCredentialStore(),
+          modelsPath: null,
+        })
+      : await ModelRuntime.create();
 
     if (this.config.token) {
       this.logger.debug(`[auth] Setting api_key token for ${this.config.provider} provider`);
@@ -168,12 +191,33 @@ export class Agent {
     }
 
     // Phase 1: Create services (loads extensions, registers providers).
-    const services = await createAgentSessionServices({
-      cwd,
-      modelRuntime: this.modelRuntime,
-      settingsManager,
-      resourceLoaderOptions,
-    });
+    // Hardened mode must not construct the SDK DefaultResourceLoader: its
+    // constructor/reload performs package and filesystem discovery before the
+    // no-* flags would have any effect. Supply a trusted-only loader directly.
+    let services: AgentSessionServices;
+    if (hardened) {
+      services = {
+        cwd,
+        agentDir: cwd,
+        modelRuntime: this.modelRuntime,
+        settingsManager,
+        resourceLoader: createWorkspaceReadOnlyResourceLoader(this.getTrustedSystemPrompt()),
+        diagnostics: [],
+      };
+    } else {
+      const loaderConfig: ResourceLoaderConfig = this.config;
+      const resourceLoaderOptions = await buildResourceLoaderOptions(
+        this.logger,
+        this.platformProvider,
+        loaderConfig
+      );
+      services = await createAgentSessionServices({
+        cwd,
+        modelRuntime: this.modelRuntime,
+        settingsManager,
+        resourceLoaderOptions,
+      });
+    }
 
     // Log any non-fatal diagnostics from service creation.
     for (const diagnostic of services.diagnostics) {
@@ -240,9 +284,20 @@ export class Agent {
     const needsPersistence =
       this.config.exportSessionHtml || this.config.exportSessionJsonl || this.config.shareSession;
     /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
-    const sessionManager = needsPersistence
-      ? SessionManager.create(services.cwd)
-      : SessionManager.inMemory(services.cwd);
+    const sessionManager = hardened
+      ? SessionManager.inMemory(services.cwd)
+      : needsPersistence
+        ? SessionManager.create(services.cwd)
+        : SessionManager.inMemory(services.cwd);
+    const sessionToolOptions = hardened
+      ? {
+          noTools: 'all' as const,
+          tools: [...WORKSPACE_READ_ONLY_TOOL_NAMES],
+          customTools: createWorkspaceReadOnlyTools(workspaceRoot!, this.workspaceBoundaryTracker),
+        }
+      : loadedTools
+        ? { tools: loadedTools }
+        : {};
     const { session } = await createAgentSessionFromServices({
       services,
       sessionManager,
@@ -251,7 +306,7 @@ export class Agent {
       // Pass loadedTools as the SDK's native allowlist (tools option).
       // Unknown tool names are silently ignored by the SDK, so we validate
       // after session creation below.
-      ...(loadedTools ? { tools: loadedTools } : {}),
+      ...sessionToolOptions,
     });
     this.session = session;
 
@@ -397,7 +452,20 @@ export class Agent {
     // populate this field during the session.
     this.lastAgentError = undefined;
 
-    await this.session.prompt(text);
+    this.workspaceBoundaryTracker.reset();
+    let promptError: unknown;
+    try {
+      await this.session.prompt(text);
+    } catch (error) {
+      promptError = error;
+    }
+
+    if (this.workspaceBoundaryTracker.violation) {
+      throw this.workspaceBoundaryTracker.violation;
+    }
+    if (promptError) {
+      throw promptError;
+    }
 
     // onPromptComplete is now routed through the agent_settled event
     // handler, so it fires when the session has truly settled.
@@ -436,6 +504,7 @@ export class Agent {
    * @returns The path to the written file.
    */
   async exportSessionHtml(outputPath: string): Promise<string> {
+    this.assertSessionExportsEnabled();
     return this.session.exportToHtml(outputPath);
   }
 
@@ -450,6 +519,7 @@ export class Agent {
    * @returns The path to the written file.
    */
   async exportSessionJsonl(outputPath: string): Promise<string> {
+    this.assertSessionExportsEnabled();
     return this.session.exportToJsonl(outputPath);
   }
 
@@ -669,6 +739,49 @@ export class Agent {
       // Session stats are metadata - don't fail the action if unavailable
       this.logger.notice('Failed to get session stats, continuing without stats');
       return undefined;
+    }
+  }
+
+  private getTrustedSystemPrompt(): string {
+    // Resource loading is disabled in hardened mode, so this prompt is the
+    // only system-level review guidance that reaches the model.
+    return getSystemPrompt(this.platformProvider.type);
+  }
+
+  private validateWorkspaceReadOnlyConfig(): void {
+    const loadedTools = this.config.loadedTools;
+    const expected = new Set<string>(WORKSPACE_READ_ONLY_TOOL_NAMES);
+    const actual = loadedTools ? new Set(loadedTools) : undefined;
+    const exactTools =
+      actual?.size === expected.size && [...expected].every(toolName => actual.has(toolName));
+
+    if (this.config.extensions?.length) {
+      throw new Error('extensions cannot be used with isolation_mode workspace-read-only');
+    }
+    if (this.config.loadBuiltinExtensions !== false) {
+      throw new Error(
+        'load_builtin_extensions must be false with isolation_mode workspace-read-only'
+      );
+    }
+    if (!exactTools) {
+      throw new Error(
+        'loaded_tools must contain exactly read, grep, find, and ls with isolation_mode workspace-read-only'
+      );
+    }
+    if (
+      this.config.exportSessionHtml ||
+      this.config.exportSessionJsonl ||
+      this.config.shareSession
+    ) {
+      throw new Error(
+        'session exports and sharing are disabled with isolation_mode workspace-read-only'
+      );
+    }
+  }
+
+  private assertSessionExportsEnabled(): void {
+    if (this.config.isolationMode === 'workspace-read-only') {
+      throw new Error('session exports are disabled with isolation_mode workspace-read-only');
     }
   }
 }
