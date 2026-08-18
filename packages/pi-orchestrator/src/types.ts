@@ -7,6 +7,7 @@
 
 import type { Temporal } from '@js-temporal/polyfill';
 import type { CreateReactionType, PlatformProvider } from './platform';
+import type { WorkspaceBoundaryViolationRecord } from './pi/workspace-read-only';
 
 /**
  * Platform-neutral logging interface.
@@ -147,6 +148,15 @@ export interface PromptResult {
    * instead of posting a misleading success comment.
    */
   error: string | undefined;
+  /**
+   * Workspace boundary refusals recorded during the run, in call order.
+   *
+   * Each entry is a tool call the sandbox rejected before it reached the
+   * filesystem, so the path behind it was never read. Absent or empty on
+   * every run that stayed inside the workspace, and on every run that was
+   * not started in a hardened isolation mode.
+   */
+  boundaryViolations?: readonly WorkspaceBoundaryViolationRecord[];
 }
 
 /**

@@ -860,6 +860,8 @@ The action exposes the following outputs, which can be consumed by downstream st
 | `session_jsonl_path` | Path to the exported session JSONL file (when `export_session_jsonl` is enabled) | `/tmp/pi-session-jsonl/session.jsonl` |
 | `share_url` | Shareable session link. GitHub provider: a viewer link (`https://pi.dev/session/#<gistId>`, or `<PI_SHARE_VIEWER_URL>#<gistId>` when the env var is set). Opengist provider: a self-rendering raw-HTML URL on the instance (or `<viewer>#<gistPageUrl>` when `PI_SHARE_VIEWER_URL` points at a custom viewer). When `share_session` succeeds | `https://pi.dev/session/#abc123def456` |
 | `success` | Whether the agent completed successfully (`true` / `false`) | `true` |
+| `workspace_boundary_violations` | Number of tool calls refused for requesting a path outside the review workspace (`isolation_mode: workspace-read-only`). The refused calls never reached the filesystem, so a non-zero count annotates the run rather than failing it | `0` |
+| `workspace_boundary_violation_summary` | Comma-separated `tool:refusal` pairs for each refused call. Never contains the requested path. Empty when no call was refused | `read:outside-workspace, ls:escaping-symlink` |
 
 > [!WARNING]
 > Tokens and cost outputs are only set when the underlying provider returns session statistics. They will be absent for providers that don't report token usage.

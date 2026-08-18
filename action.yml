@@ -141,6 +141,10 @@ outputs:
     description: 'The exact model response text, without the legacy completion fallback'
   success:
     description: 'Whether the agent completed successfully (true/false)'
+  workspace_boundary_violations:
+    description: 'Number of tool calls refused for requesting a path outside the review workspace (isolation_mode: workspace-read-only). The refused calls never reached the filesystem; a non-zero count annotates the run rather than failing it.'
+  workspace_boundary_violation_summary:
+    description: 'Comma-separated tool:refusal pairs for each refused call, e.g. "read:outside-workspace, ls:escaping-symlink". Never contains the requested path. Empty when no call was refused.'
   input_tokens:
     description: 'Number of input tokens consumed'
   output_tokens:

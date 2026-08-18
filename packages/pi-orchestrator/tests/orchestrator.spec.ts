@@ -947,7 +947,7 @@ describe('ActionOrchestrator', () => {
       expect(mockGit.createFinalComment).not.toHaveBeenCalled();
     });
 
-    test('fails closed on a workspace boundary violation without delivering a comment', async () => {
+    test('still fails closed if a boundary violation is thrown instead of reported', async () => {
       const boundaryError = Object.assign(new Error('workspace boundary violation: /proc'), {
         code: 'WORKSPACE_BOUNDARY_VIOLATION',
       });
@@ -964,6 +964,44 @@ describe('ActionOrchestrator', () => {
       expect(mockGit.createFinalComment).not.toHaveBeenCalled();
       expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('response', expect.anything());
       expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('raw_response', expect.anything());
+    });
+
+    test('delivers the review and annotates it when a path was refused', async () => {
+      const result = 'the finished review — a refused path must not discard it';
+      setAgentRunResult(mockPiAgent, {
+        result,
+        boundaryViolations: [
+          { tool: 'read', refusal: 'outside-workspace' },
+          { tool: 'ls', refusal: 'escaping-symlink' },
+        ],
+      });
+
+      const orchestrator = createOrchestrator({ isolationMode: 'workspace-read-only' });
+      await orchestrator.execute();
+
+      // Containment already happened at the tool call, so the run succeeds and
+      // the response survives; the refusal travels out as an annotation.
+      expect(mockOutputSink.setFailed).not.toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('raw_response', result);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', true);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('workspace_boundary_violations', '2');
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+        'workspace_boundary_violation_summary',
+        'read:outside-workspace, ls:escaping-symlink'
+      );
+    });
+
+    test('reports a zero violation count for a clean hardened run', async () => {
+      setAgentRunResult(mockPiAgent, { result: 'clean review' });
+
+      const orchestrator = createOrchestrator({ isolationMode: 'workspace-read-only' });
+      await orchestrator.execute();
+
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('workspace_boundary_violations', '0');
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+        'workspace_boundary_violation_summary',
+        ''
+      );
     });
 
     test('sets success output to true on successful execution', async () => {

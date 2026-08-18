@@ -178,7 +178,7 @@ describe('workspace-read-only Agent startup', () => {
     agent.dispose();
   });
 
-  test('Agent.run rejects after the SDK converts a boundary throw into a tool result', async () => {
+  test('Agent.run delivers the response and reports the refusal as a record', async () => {
     const requests: Context[] = [];
     const stream = vi
       .spyOn(ModelRuntime.prototype, 'streamSimple')
@@ -227,9 +227,14 @@ describe('workspace-read-only Agent startup', () => {
     await agent.ready();
 
     try {
-      await expect(agent.run('Read /proc/self/environ')).rejects.toMatchObject({
-        code: WORKSPACE_BOUNDARY_VIOLATION_CODE,
-      });
+      // A refused call is contained at the tool, so the run must not reject:
+      // the session kept going and its work belongs to the caller. Delivery of
+      // that text is asserted in orchestrator.spec.ts; this stub streams no
+      // assistant text, so the contract here is "resolves, carrying the record".
+      const outcome = await agent.run('Read /proc/self/environ');
+
+      expect(outcome.error).toBeUndefined();
+      expect(outcome.boundaryViolations).toEqual([{ tool: 'read', refusal: 'outside-workspace' }]);
     } finally {
       agent.dispose();
     }
