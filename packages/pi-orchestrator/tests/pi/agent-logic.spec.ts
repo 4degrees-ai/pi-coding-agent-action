@@ -441,6 +441,23 @@ describe('Agent', () => {
         expect(setToolsSpy).not.toHaveBeenCalled();
       });
 
+      test('rejects convergence at or after finalization before prompting', async () => {
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 900,
+          finalizeAfterSeconds: 600,
+        });
+        await agent.ready();
+        const session = buildMockSession({ messages: [] });
+        session.prompt = vi.fn(async () => {});
+        injectMockSession(agent, session);
+
+        await expect(agent.run('Review this change')).rejects.toThrow(
+          'convergence review budget must be less than finalization review budget'
+        );
+        expect(session.prompt).not.toHaveBeenCalled();
+      });
+
       test('aborts and surfaces a finalization steering failure', async () => {
         vi.useFakeTimers();
         const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {

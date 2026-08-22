@@ -482,6 +482,15 @@ export class Agent {
     };
     validateReviewBudget('convergence', this.config.convergeAfterSeconds);
     validateReviewBudget('finalization', this.config.finalizeAfterSeconds);
+    if (
+      this.config.convergeAfterSeconds !== undefined &&
+      this.config.finalizeAfterSeconds !== undefined &&
+      this.config.convergeAfterSeconds >= this.config.finalizeAfterSeconds
+    ) {
+      throw new Error(
+        'convergence review budget must be less than finalization review budget when both are set'
+      );
+    }
 
     const originalToolNames = this.config.finalizeAfterSeconds
       ? this.session.getActiveToolNames()
