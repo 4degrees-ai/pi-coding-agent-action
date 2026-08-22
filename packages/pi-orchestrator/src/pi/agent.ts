@@ -77,6 +77,7 @@ type SummarizationRetryAttemptStartEvent = Extract<
  * the actionable error message instead of hanging.
  */
 const MODEL_REFRESH_TIMEOUT_MS = 15_000;
+const MAX_REVIEW_BUDGET_SECONDS = 2_147_483;
 
 const REVIEW_CONVERGENCE_PROMPT =
   'The convergence threshold has been reached. Stop opening new investigative branches. Review ' +
@@ -469,21 +470,37 @@ export class Agent {
     let steeringError: unknown;
     let runSettled = false;
     let toolsDisabled = false;
+    const validateReviewBudget = (stage: string, seconds: number | undefined): void => {
+      if (
+        seconds !== undefined &&
+        (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > MAX_REVIEW_BUDGET_SECONDS)
+      ) {
+        throw new Error(
+          `${stage} review budget must be between 1 and ${MAX_REVIEW_BUDGET_SECONDS} seconds`
+        );
+      }
+    };
+    validateReviewBudget('convergence', this.config.convergeAfterSeconds);
+    validateReviewBudget('finalization', this.config.finalizeAfterSeconds);
+
     const originalToolNames = this.config.finalizeAfterSeconds
       ? this.session.getActiveToolNames()
       : [];
     const reviewBudgetTimers: ReturnType<typeof setTimeout>[] = [];
+    const reviewBudgetTasks = new Set<Promise<void>>();
 
-    const recordSteeringFailure = (stage: string, error: unknown): void => {
-      steeringError = new Error(`Failed to steer review during ${stage}`, { cause: error });
+    const recordSteeringFailure = async (stage: string, error: unknown): Promise<void> => {
+      steeringError ??= new Error(`Failed to steer review during ${stage}`, { cause: error });
       this.logger.error(
         `[review-budget] ${stage} steering failed: ${error instanceof Error ? error.message : String(error)}`
       );
-      void this.session.abort().catch(abortError => {
+      try {
+        await this.session.abort();
+      } catch (abortError) {
         this.logger.error(
           `[review-budget] failed to abort session after steering error: ${abortError instanceof Error ? abortError.message : String(abortError)}`
         );
-      });
+      }
     };
 
     const scheduleReviewBudget = (
@@ -500,9 +517,10 @@ export class Agent {
             return;
           }
           this.logger.info(`[review-budget] ${stage} threshold reached after ${seconds}s`);
-          void Promise.resolve()
+          const reviewBudgetTask = Promise.resolve()
             .then(steer)
             .catch(error => recordSteeringFailure(stage, error));
+          reviewBudgetTasks.add(reviewBudgetTask);
         }, seconds * 1000)
       );
     };
@@ -525,6 +543,7 @@ export class Agent {
       for (const timer of reviewBudgetTimers) {
         clearTimeout(timer);
       }
+      await Promise.allSettled([...reviewBudgetTasks]);
       if (toolsDisabled) {
         this.session.setActiveToolsByName(originalToolNames);
       }

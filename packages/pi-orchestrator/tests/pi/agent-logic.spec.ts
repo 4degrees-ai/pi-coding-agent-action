@@ -349,12 +349,15 @@ describe('Agent', () => {
       function createPendingPrompt(): {
         promise: Promise<void>;
         resolve: () => void;
+        reject: (error: Error) => void;
       } {
         let resolve!: () => void;
-        const promise = new Promise<void>(done => {
+        let reject!: (error: Error) => void;
+        const promise = new Promise<void>((done, fail) => {
           resolve = done;
+          reject = fail;
         });
-        return { promise, resolve };
+        return { promise, resolve, reject };
       }
 
       test('steers toward convergence without changing tools at the convergence threshold', async () => {
@@ -488,6 +491,57 @@ describe('Agent', () => {
 
         await runExpectation;
         expect(session.abort).toHaveBeenCalledOnce();
+      });
+
+      test('surfaces a steering promise that rejects after the prompt settles', async () => {
+        vi.useFakeTimers();
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 600,
+        });
+        await agent.ready();
+        const pendingPrompt = createPendingPrompt();
+        const pendingSteer = createPendingPrompt();
+        const session = buildMockSession({ messages: [], suppressEvents: true });
+        session.prompt = vi.fn(() => pendingPrompt.promise);
+        session.steer = vi.fn(() => pendingSteer.promise);
+        session.abort = vi.fn(async () => {});
+        injectMockSession(agent, session);
+
+        let runSettled = false;
+        const runOutcome = agent.run('Review this change').then(
+          () => 'resolved',
+          () => 'rejected'
+        );
+        void runOutcome.then(() => {
+          runSettled = true;
+        });
+        await vi.advanceTimersByTimeAsync(600_000);
+        pendingPrompt.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(runSettled).toBe(false);
+
+        pendingSteer.reject(new Error('late queue failure'));
+        expect(await runOutcome).toBe('rejected');
+        expect(session.abort).toHaveBeenCalledOnce();
+      });
+
+      test('rejects a timer value above the Node timeout range', async () => {
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          finalizeAfterSeconds: 2_147_484,
+        });
+        await agent.ready();
+        const session = buildMockSession({ messages: [] });
+        session.prompt = vi.fn(async () => {});
+        injectMockSession(agent, session);
+
+        await expect(agent.run('Review this change')).rejects.toThrow(
+          'finalization review budget must be between 1 and 2147483 seconds'
+        );
+        expect(session.prompt).not.toHaveBeenCalled();
       });
     });
 

@@ -818,13 +818,13 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | `auto_compaction` | Enable automatic context compaction when the conversation grows too large for the model's context window. Pi summarizes older messages to free up context space | No | `false` |
 | `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
 | `branch_name_template` | Template for auto-generated branch names in `create_pull_request`. Supports variables: `{number}` (issue/PR number), `{timestamp}` (epoch ms), `{title}` (slugified PR title). Default: `pi/issue{number}-{timestamp}` | No | - |
-| `converge_after_seconds` | After this many seconds, keep tools enabled but steer the agent to stop broad exploration and validate its highest-risk unresolved findings | No | - |
+| `converge_after_seconds` | After this many seconds (1–2147483), keep tools enabled but steer the agent to stop broad exploration and validate its highest-risk unresolved findings | No | - |
 | `diff_ignore_patterns` | Space-separated list of file patterns to exclude from PR diffs by default (e.g. `dist/ package-lock.json`). The agent can still provide additional patterns at call time | No | - |
 | `diff_max_bytes` | Maximum diff size in bytes returned by the `get_pr_diff` tool | No | `102400` |
 | `diff_max_lines` | Maximum number of diff lines returned by the `get_pr_diff` tool | No | `1000` |
 | `export_session_html` | Export the session as a self-contained HTML file. Auto-enabled when `share_session` is true | No | `false` |
 | `export_session_jsonl` | Export the session as a JSONL file (one JSON object per line) for programmatic consumption | No | `false` |
-| `finalize_after_seconds` | After this many seconds, disable tools and steer the agent to produce its final result from evidence already collected | No | - |
+| `finalize_after_seconds` | After this many seconds (1–2147483), disable tools and steer the agent to produce its final result from evidence already collected | No | - |
 | `extensions` | Custom Pi extensions to load (one per line). Supports npm packages (npm:package-name), git repos (git:github.com/user/repo), or local file paths | No | - |
 | `github_token` | GitHub token for API access. The default `GITHUB_TOKEN` works for all standard operations; to use `share_session`, provide a PAT/App token with gist scope instead | Yes | - |
 | `load_builtin_extensions` | Whether to load built-in GitHub tools (see [Custom Tools](#custom-tools) for the full list) | No | `true` |

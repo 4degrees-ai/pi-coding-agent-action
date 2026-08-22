@@ -51,12 +51,12 @@ inputs:
     default: 'all'
 
   converge_after_seconds:
-    description: 'Optional review time budget. After this many seconds, the agent keeps its tools but is steered to stop opening new investigative branches and validate its highest-risk unresolved findings. Leave empty to disable.'
+    description: 'Optional review time budget (1–2147483). After this many seconds, the agent keeps its tools but is steered to stop opening new investigative branches and validate its highest-risk unresolved findings. Leave empty to disable.'
     required: false
     default: ''
 
   finalize_after_seconds:
-    description: 'Optional review time budget. After this many seconds, tools are disabled and the agent is steered to produce its final review from evidence already collected. Leave empty to disable.'
+    description: 'Optional review time budget (1–2147483). After this many seconds, tools are disabled and the agent is steered to produce its final review from evidence already collected. Leave empty to disable.'
     required: false
     default: ''
 

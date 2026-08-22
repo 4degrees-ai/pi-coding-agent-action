@@ -217,11 +217,17 @@ describe('gatherActionsConfig', () => {
       expect(config.finalizeAfterSeconds).toBe(900);
     });
 
-    test('ignores invalid review time budgets', () => {
-      mockCore({ converge_after_seconds: 'nope', finalize_after_seconds: '0' });
-      const config = gatherActionsConfig();
-      expect(config.convergeAfterSeconds).toBeUndefined();
-      expect(config.finalizeAfterSeconds).toBeUndefined();
+    test.each(['nope', '0', '-1', '1e3', '2147484'])(
+      'rejects invalid review time budget %s',
+      value => {
+        mockCore({ converge_after_seconds: value });
+        expect(() => gatherActionsConfig()).toThrow('`converge_after_seconds` must be');
+      }
+    );
+
+    test('accepts the largest timer-safe review time budget', () => {
+      mockCore({ finalize_after_seconds: '2147483' });
+      expect(gatherActionsConfig().finalizeAfterSeconds).toBe(2_147_483);
     });
 
     test('rejects a convergence threshold that does not precede finalization', () => {
