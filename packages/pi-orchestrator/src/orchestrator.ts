@@ -28,6 +28,7 @@ import type { CreateReactionType, PlatformProvider } from './platform';
 import { getActionVersion, formatActionVersion } from './version';
 import { MAX_GIST_CONTENT_BYTES, type CreatedGist, type GistProvider } from './share/gist';
 import { resolveGistProvider, resolveShareToken } from './share/provider';
+import { WORKSPACE_BOUNDARY_VIOLATION_CODE } from './pi/workspace-read-only';
 
 /**
  * Build the body of the success comment posted at the end of a run.
@@ -109,15 +110,25 @@ export class ActionOrchestrator {
         throw new Error('No prompt found - cannot proceed');
       }
 
-      reaction = await this.addReactionBestEffort();
+      if (!this.isWorkspaceReadOnly()) {
+        reaction = await this.addReactionBestEffort();
+      }
 
       pi = this.piAgentFactory(this.config, this.logger, this.platformProvider);
       const { result, sessionStats, error } = await pi.run(prompt);
+      if (!(this.isWorkspaceReadOnly() && this.isWorkspaceBoundaryViolation(error))) {
+        this.outputSink.setOutput('raw_response', result);
+      }
 
-      await this.runSessionExports(pi);
-      await this.runSessionShare();
+      if (!this.isWorkspaceReadOnly()) {
+        await this.runSessionExports(pi);
+        await this.runSessionShare();
+      }
 
       if (error) {
+        if (this.isWorkspaceReadOnly() && this.isWorkspaceBoundaryViolation(error)) {
+          throw this.createWorkspaceBoundaryError();
+        }
         await this.handleSessionError(error, result, startTime, reaction, sessionStats);
         return;
       }
@@ -226,6 +237,11 @@ export class ActionOrchestrator {
     reaction: CreateReactionType | undefined,
     pi?: PiAgent
   ): Promise<void> {
+    if (this.isWorkspaceReadOnly() && this.isWorkspaceBoundaryViolation(e)) {
+      this.outputSink.setFailed(this.createWorkspaceBoundaryError());
+      return;
+    }
+
     const errorMessage = e instanceof Error ? e.message : String(e);
 
     // Attempt to recover partial session usage even when prompt() rejected,
@@ -542,7 +558,7 @@ export class ActionOrchestrator {
     success: boolean
   ): Promise<void> {
     try {
-      if (reaction) {
+      if (reaction && !this.isWorkspaceReadOnly()) {
         await this.git.deleteReaction(reaction);
       }
     } catch (e) {
@@ -582,6 +598,30 @@ export class ActionOrchestrator {
       metadata.sessionStats = sessionStats;
     }
 
-    await this.git.createFinalComment(body, metadata);
+    if (!this.isWorkspaceReadOnly()) {
+      await this.git.createFinalComment(body, metadata);
+    }
+  }
+
+  private isWorkspaceReadOnly(): boolean {
+    return this.config.isolationMode === 'workspace-read-only';
+  }
+
+  private isWorkspaceBoundaryViolation(error: unknown): boolean {
+    if (typeof error === 'string') {
+      return error.includes(WORKSPACE_BOUNDARY_VIOLATION_CODE);
+    }
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+    return 'code' in error && error.code === WORKSPACE_BOUNDARY_VIOLATION_CODE;
+  }
+
+  private createWorkspaceBoundaryError(): Error & { code: string } {
+    const error = new Error(
+      'workspace boundary violation: requested path is outside the review workspace'
+    ) as Error & { code: string };
+    error.code = WORKSPACE_BOUNDARY_VIOLATION_CODE;
+    return error;
   }
 }

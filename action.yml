@@ -50,6 +50,11 @@ inputs:
     required: false
     default: 'all'
 
+  isolation_mode:
+    description: 'Optional execution isolation. workspace-read-only disables repository extensions and GitHub mutations, and exposes only read, grep, find, and ls inside GITHUB_WORKSPACE. It requires load_builtin_extensions: false, loaded_tools to contain exactly read, grep, find, and ls, and export_session_html: false, export_session_jsonl: false, and share_session: false; invalid companion settings are rejected.'
+    required: false
+    default: ''
+
   diff_max_lines:
     description: 'Maximum number of diff lines returned by the get_pr_diff tool. Defaults to 1000.'
     required: false
@@ -132,6 +137,8 @@ runs:
 outputs:
   response:
     description: 'The main agent response text'
+  raw_response:
+    description: 'The exact model response text, without the legacy completion fallback'
   success:
     description: 'Whether the agent completed successfully (true/false)'
   input_tokens:

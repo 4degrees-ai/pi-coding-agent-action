@@ -893,6 +893,88 @@ describe('ActionOrchestrator', () => {
       expect(mockOutputSink.setOutput).toHaveBeenCalledWith('response', 'Your tests are ready!');
     });
 
+    test('sets raw_response to the exact non-empty model text', async () => {
+      const result = '## Finding\n\nbyte-preserving: `true`\n\n終';
+      setAgentRunResult(mockPiAgent, { result });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('raw_response', result);
+    });
+
+    test('successful hardened runs perform no GitHub reaction or comment mutation', async () => {
+      const result = 'read-only review complete';
+      setAgentRunResult(mockPiAgent, { result });
+
+      const orchestrator = createOrchestrator({ isolationMode: 'workspace-read-only' });
+      await orchestrator.execute();
+
+      expect(mockGit.addReaction).not.toHaveBeenCalled();
+      expect(mockGit.deleteReaction).not.toHaveBeenCalled();
+      expect(mockGit.createFinalComment).not.toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('raw_response', result);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', true);
+    });
+
+    test('keeps raw_response empty while legacy response keeps its completion fallback', async () => {
+      setAgentRunResult(mockPiAgent, { result: '' });
+
+      const orchestrator = createOrchestrator();
+      await orchestrator.execute();
+
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('raw_response', '');
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith(
+        'response',
+        '✅ Agent session completed'
+      );
+    });
+
+    test('provider errors preserve raw_response while remaining failed and mutation-free', async () => {
+      const result = 'partial provider response — preserve exactly';
+      setAgentRunResult(mockPiAgent, { result, error: 'provider unavailable' });
+
+      const orchestrator = createOrchestrator({ isolationMode: 'workspace-read-only' });
+      await orchestrator.execute();
+
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('raw_response', result);
+      expect(mockOutputSink.setOutput).toHaveBeenCalledWith('success', false);
+      expect(mockOutputSink.setFailed).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'provider unavailable' })
+      );
+      expect(mockGit.addReaction).not.toHaveBeenCalled();
+      expect(mockGit.deleteReaction).not.toHaveBeenCalled();
+      expect(mockGit.createFinalComment).not.toHaveBeenCalled();
+    });
+
+    test('fails closed on a workspace boundary violation without delivering a comment', async () => {
+      const boundaryError = Object.assign(new Error('workspace boundary violation: /proc'), {
+        code: 'WORKSPACE_BOUNDARY_VIOLATION',
+      });
+      setAgentRunError(mockPiAgent, boundaryError);
+
+      const orchestrator = createOrchestrator({
+        isolationMode: 'workspace-read-only',
+      } as Partial<PiConfig>);
+
+      await expect(orchestrator.execute()).rejects.toMatchObject({
+        code: 'WORKSPACE_BOUNDARY_VIOLATION',
+      });
+      const failedCalls = (mockOutputSink.setFailed as unknown as { mock: { calls: unknown[][] } })
+        .mock.calls;
+      const failedError = failedCalls[0]?.[0];
+      expect(failedError).toBeInstanceOf(Error);
+      expect(failedError).not.toBe(boundaryError);
+      expect(failedError).toMatchObject({
+        code: 'WORKSPACE_BOUNDARY_VIOLATION',
+        message: 'workspace boundary violation: requested path is outside the review workspace',
+      });
+      expect(String(failedError)).not.toContain('/proc');
+      expect(mockGit.createFinalComment).not.toHaveBeenCalled();
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('response', expect.anything());
+      expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('raw_response', expect.anything());
+    });
+
     test('sets success output to true on successful execution', async () => {
       const orchestrator = createOrchestrator();
       await orchestrator.execute();
