@@ -463,6 +463,32 @@ describe('Agent', () => {
         expect(session.abort).toHaveBeenCalledOnce();
         expect(setToolsSpy).toHaveBeenLastCalledWith(['read', 'grep', 'find', 'ls']);
       });
+
+      test('contains a synchronous convergence steering failure', async () => {
+        vi.useFakeTimers();
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 600,
+        });
+        await agent.ready();
+        const pendingPrompt = createPendingPrompt();
+        const session = buildMockSession({ messages: [], suppressEvents: true });
+        session.prompt = vi.fn(() => pendingPrompt.promise);
+        session.steer = vi.fn(() => {
+          throw new Error('queue unavailable');
+        });
+        session.abort = vi.fn(async () => pendingPrompt.resolve());
+        injectMockSession(agent, session);
+
+        const runPromise = agent.run('Review this change');
+        const runExpectation = expect(runPromise).rejects.toThrow(
+          'Failed to steer review during convergence'
+        );
+        await vi.advanceTimersByTimeAsync(600_000);
+
+        await runExpectation;
+        expect(session.abort).toHaveBeenCalledOnce();
+      });
     });
 
     test('throws error for empty text', async () => {

@@ -500,7 +500,9 @@ export class Agent {
             return;
           }
           this.logger.info(`[review-budget] ${stage} threshold reached after ${seconds}s`);
-          void steer().catch(error => recordSteeringFailure(stage, error));
+          void Promise.resolve()
+            .then(steer)
+            .catch(error => recordSteeringFailure(stage, error));
         }, seconds * 1000)
       );
     };
