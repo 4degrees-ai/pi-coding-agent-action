@@ -203,6 +203,41 @@ describe('gatherActionsConfig', () => {
     });
   });
 
+  describe('review time budgets', () => {
+    test('omits review time budgets by default', () => {
+      const config = gatherActionsConfig();
+      expect(config.convergeAfterSeconds).toBeUndefined();
+      expect(config.finalizeAfterSeconds).toBeUndefined();
+    });
+
+    test('parses positive review time budgets', () => {
+      mockCore({ converge_after_seconds: '600', finalize_after_seconds: '900' });
+      const config = gatherActionsConfig();
+      expect(config.convergeAfterSeconds).toBe(600);
+      expect(config.finalizeAfterSeconds).toBe(900);
+    });
+
+    test.each(['nope', '0', '-1', '1e3', '2147484'])(
+      'rejects invalid review time budget %s',
+      value => {
+        mockCore({ converge_after_seconds: value });
+        expect(() => gatherActionsConfig()).toThrow('`converge_after_seconds` must be');
+      }
+    );
+
+    test('accepts the largest timer-safe review time budget', () => {
+      mockCore({ finalize_after_seconds: '2147483' });
+      expect(gatherActionsConfig().finalizeAfterSeconds).toBe(2_147_483);
+    });
+
+    test('rejects a convergence threshold that does not precede finalization', () => {
+      mockCore({ converge_after_seconds: '900', finalize_after_seconds: '900' });
+      expect(() => gatherActionsConfig()).toThrow(
+        '`converge_after_seconds` must be less than `finalize_after_seconds`'
+      );
+    });
+  });
+
   describe('base_url', () => {
     test('parses base_url when provided', () => {
       mockCore({ base_url: 'https://my-proxy.example.com/v1' });

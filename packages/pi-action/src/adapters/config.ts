@@ -38,6 +38,7 @@ export const MISSING_MODEL_MESSAGE =
   'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.';
 
 const WORKSPACE_READ_ONLY_MODE = 'workspace-read-only';
+const MAX_REVIEW_BUDGET_SECONDS = 2_147_483;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers (pure functions)
@@ -62,6 +63,25 @@ export function parsePositiveIntInput(raw: string): number | undefined {
   }
   const parsed = parseInt(raw, 10);
   return parsed > 0 ? parsed : undefined;
+}
+
+function parseReviewBudgetInput(inputName: string, raw: string): number | undefined {
+  const normalized = raw.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  if (!/^[1-9]\d*$/.test(normalized)) {
+    throw new Error(
+      `\`${inputName}\` must be a positive whole number no greater than ${MAX_REVIEW_BUDGET_SECONDS} seconds.`
+    );
+  }
+  const seconds = Number(normalized);
+  if (!Number.isSafeInteger(seconds) || seconds > MAX_REVIEW_BUDGET_SECONDS) {
+    throw new Error(
+      `\`${inputName}\` must be a positive whole number no greater than ${MAX_REVIEW_BUDGET_SECONDS} seconds.`
+    );
+  }
+  return seconds;
 }
 
 /**
@@ -126,6 +146,21 @@ export function validateRequiredInputs(provider: string, model: string): void {
   }
   if (!model) {
     throw new Error(MISSING_MODEL_MESSAGE);
+  }
+}
+
+function validateReviewBudgets(
+  convergeAfterSeconds: number | undefined,
+  finalizeAfterSeconds: number | undefined
+): void {
+  if (
+    convergeAfterSeconds !== undefined &&
+    finalizeAfterSeconds !== undefined &&
+    convergeAfterSeconds >= finalizeAfterSeconds
+  ) {
+    throw new Error(
+      '`converge_after_seconds` must be less than `finalize_after_seconds` when both are set.'
+    );
   }
 }
 
@@ -241,6 +276,15 @@ export function gatherActionsConfig(): PiConfig {
   const diffMaxLines = parsePositiveIntInput(core.getInput('diff_max_lines'));
   const diffMaxBytes = parsePositiveIntInput(core.getInput('diff_max_bytes'));
   const prNumber = parsePositiveIntInput(core.getInput('pr_number'));
+  const convergeAfterSeconds = parseReviewBudgetInput(
+    'converge_after_seconds',
+    core.getInput('converge_after_seconds')
+  );
+  const finalizeAfterSeconds = parseReviewBudgetInput(
+    'finalize_after_seconds',
+    core.getInput('finalize_after_seconds')
+  );
+  validateReviewBudgets(convergeAfterSeconds, finalizeAfterSeconds);
 
   // --- Session sharing inputs --------------------------------------------
   const githubToken = core.getInput('github_token') || undefined;
@@ -274,5 +318,7 @@ export function gatherActionsConfig(): PiConfig {
     ...(diffMaxBytes ? { diffMaxBytes } : {}),
     ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
     ...(prNumber ? { prNumber } : {}),
+    ...(convergeAfterSeconds ? { convergeAfterSeconds } : {}),
+    ...(finalizeAfterSeconds ? { finalizeAfterSeconds } : {}),
   };
 }

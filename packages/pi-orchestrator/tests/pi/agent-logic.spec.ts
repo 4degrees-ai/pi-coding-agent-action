@@ -96,6 +96,7 @@ const mockCoreAdapter = {
   notice: vi.fn(noop),
   debug: vi.fn(noop),
   info: vi.fn(noop),
+  error: vi.fn(noop),
   setFailed: vi.fn(noop),
   setOutput: vi.fn(noop),
   warning: vi.fn(noop),
@@ -340,6 +341,227 @@ describe('Agent', () => {
   });
 
   describe('run', () => {
+    describe('review time budgets', () => {
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      function createPendingPrompt(): {
+        promise: Promise<void>;
+        resolve: () => void;
+        reject: (error: Error) => void;
+      } {
+        let resolve!: () => void;
+        let reject!: (error: Error) => void;
+        const promise = new Promise<void>((done, fail) => {
+          resolve = done;
+          reject = fail;
+        });
+        return { promise, resolve, reject };
+      }
+
+      test('steers toward convergence without changing tools at the convergence threshold', async () => {
+        vi.useFakeTimers();
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 600,
+          finalizeAfterSeconds: 900,
+        });
+        await agent.ready();
+        const pendingPrompt = createPendingPrompt();
+        const session = buildMockSession({ messages: [], suppressEvents: true });
+        session.prompt = vi.fn(() => pendingPrompt.promise);
+        const steerSpy = vi.spyOn(session, 'steer');
+        const setToolsSpy = vi.spyOn(session, 'setActiveToolsByName');
+        injectMockSession(agent, session);
+
+        const runPromise = agent.run('Review this change');
+        await vi.advanceTimersByTimeAsync(600_000);
+
+        expect(steerSpy).toHaveBeenCalledOnce();
+        expect(steerSpy).toHaveBeenCalledWith(expect.stringContaining('Stop opening new'));
+        expect(setToolsSpy).not.toHaveBeenCalled();
+
+        pendingPrompt.resolve();
+        await runPromise;
+      });
+
+      test('disables tools and requests final synthesis exactly once at the final threshold', async () => {
+        vi.useFakeTimers();
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 600,
+          finalizeAfterSeconds: 900,
+        });
+        await agent.ready();
+        const pendingPrompt = createPendingPrompt();
+        const session = buildMockSession({
+          messages: [],
+          suppressEvents: true,
+          activeToolNames: ['read', 'grep', 'find', 'ls'],
+        });
+        session.prompt = vi.fn(() => pendingPrompt.promise);
+        const steerSpy = vi.spyOn(session, 'steer');
+        const setToolsSpy = vi.spyOn(session, 'setActiveToolsByName');
+        injectMockSession(agent, session);
+
+        const runPromise = agent.run('Review this change');
+        await vi.advanceTimersByTimeAsync(1_200_000);
+
+        expect(steerSpy).toHaveBeenCalledTimes(2);
+        expect(steerSpy).toHaveBeenLastCalledWith(
+          expect.stringContaining('Produce the final code review now')
+        );
+        expect(setToolsSpy).toHaveBeenCalledTimes(1);
+        expect(setToolsSpy).toHaveBeenCalledWith([]);
+
+        pendingPrompt.resolve();
+        await runPromise;
+        expect(setToolsSpy).toHaveBeenCalledTimes(2);
+        expect(setToolsSpy).toHaveBeenLastCalledWith(['read', 'grep', 'find', 'ls']);
+      });
+
+      test('clears review time budgets after natural completion', async () => {
+        vi.useFakeTimers();
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 600,
+          finalizeAfterSeconds: 900,
+        });
+        await agent.ready();
+        const session = buildMockSession({ messages: [] });
+        const steerSpy = vi.spyOn(session, 'steer');
+        const setToolsSpy = vi.spyOn(session, 'setActiveToolsByName');
+        injectMockSession(agent, session);
+
+        await agent.run('Review this change');
+        await vi.advanceTimersByTimeAsync(1_200_000);
+
+        expect(steerSpy).not.toHaveBeenCalled();
+        expect(setToolsSpy).not.toHaveBeenCalled();
+      });
+
+      test('rejects convergence at or after finalization before prompting', async () => {
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 900,
+          finalizeAfterSeconds: 600,
+        });
+        await agent.ready();
+        const session = buildMockSession({ messages: [] });
+        session.prompt = vi.fn(async () => {});
+        injectMockSession(agent, session);
+
+        await expect(agent.run('Review this change')).rejects.toThrow(
+          'convergence review budget must be less than finalization review budget'
+        );
+        expect(session.prompt).not.toHaveBeenCalled();
+      });
+
+      test('aborts and surfaces a finalization steering failure', async () => {
+        vi.useFakeTimers();
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          finalizeAfterSeconds: 900,
+        });
+        await agent.ready();
+        const pendingPrompt = createPendingPrompt();
+        const session = buildMockSession({ messages: [], suppressEvents: true });
+        session.prompt = vi.fn(() => pendingPrompt.promise);
+        session.steer = vi.fn().mockRejectedValue(new Error('queue unavailable'));
+        session.abort = vi.fn(async () => pendingPrompt.resolve());
+        const setToolsSpy = vi.spyOn(session, 'setActiveToolsByName');
+        injectMockSession(agent, session);
+
+        const runPromise = agent.run('Review this change');
+        const runExpectation = expect(runPromise).rejects.toThrow(
+          'Failed to steer review during finalization'
+        );
+        await vi.advanceTimersByTimeAsync(900_000);
+
+        await runExpectation;
+        expect(session.abort).toHaveBeenCalledOnce();
+        expect(setToolsSpy).toHaveBeenLastCalledWith(['read', 'grep', 'find', 'ls']);
+      });
+
+      test('contains a synchronous convergence steering failure', async () => {
+        vi.useFakeTimers();
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 600,
+        });
+        await agent.ready();
+        const pendingPrompt = createPendingPrompt();
+        const session = buildMockSession({ messages: [], suppressEvents: true });
+        session.prompt = vi.fn(() => pendingPrompt.promise);
+        session.steer = vi.fn(() => {
+          throw new Error('queue unavailable');
+        });
+        session.abort = vi.fn(async () => pendingPrompt.resolve());
+        injectMockSession(agent, session);
+
+        const runPromise = agent.run('Review this change');
+        const runExpectation = expect(runPromise).rejects.toThrow(
+          'Failed to steer review during convergence'
+        );
+        await vi.advanceTimersByTimeAsync(600_000);
+
+        await runExpectation;
+        expect(session.abort).toHaveBeenCalledOnce();
+      });
+
+      test('surfaces a steering promise that rejects after the prompt settles', async () => {
+        vi.useFakeTimers();
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          convergeAfterSeconds: 600,
+        });
+        await agent.ready();
+        const pendingPrompt = createPendingPrompt();
+        const pendingSteer = createPendingPrompt();
+        const session = buildMockSession({ messages: [], suppressEvents: true });
+        session.prompt = vi.fn(() => pendingPrompt.promise);
+        session.steer = vi.fn(() => pendingSteer.promise);
+        session.abort = vi.fn(async () => {});
+        injectMockSession(agent, session);
+
+        let runSettled = false;
+        const runOutcome = agent.run('Review this change').then(
+          () => 'resolved',
+          () => 'rejected'
+        );
+        void runOutcome.then(() => {
+          runSettled = true;
+        });
+        await vi.advanceTimersByTimeAsync(600_000);
+        pendingPrompt.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(runSettled).toBe(false);
+
+        pendingSteer.reject(new Error('late queue failure'));
+        expect(await runOutcome).toBe('rejected');
+        expect(session.abort).toHaveBeenCalledOnce();
+      });
+
+      test('rejects a timer value above the Node timeout range', async () => {
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          finalizeAfterSeconds: 2_147_484,
+        });
+        await agent.ready();
+        const session = buildMockSession({ messages: [] });
+        session.prompt = vi.fn(async () => {});
+        injectMockSession(agent, session);
+
+        await expect(agent.run('Review this change')).rejects.toThrow(
+          'finalization review budget must be between 1 and 2147483 seconds'
+        );
+        expect(session.prompt).not.toHaveBeenCalled();
+      });
+    });
+
     test('throws error for empty text', async () => {
       const agent = createRealAgent();
       await agent.ready();
@@ -803,6 +1025,10 @@ describe('Agent', () => {
           listener?.(event);
         }
       },
+      steer: async () => {},
+      getActiveToolNames: () => [],
+      setActiveToolsByName: () => {},
+      abort: async () => {},
       subscribe: (cb: (event: MockSessionEvent) => void) => {
         listener = cb;
       },

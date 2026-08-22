@@ -78,6 +78,18 @@ type SummarizationRetryAttemptStartEvent = Extract<
  * the actionable error message instead of hanging.
  */
 const MODEL_REFRESH_TIMEOUT_MS = 15_000;
+const MAX_REVIEW_BUDGET_SECONDS = 2_147_483;
+
+const REVIEW_CONVERGENCE_PROMPT =
+  'The convergence threshold has been reached. Stop opening new investigative branches. Review ' +
+  'coverage of the changed files, choose the highest-risk unresolved hypotheses, and use the ' +
+  'remaining tool calls only to confirm or reject those findings.';
+
+const REVIEW_FINALIZATION_PROMPT =
+  'Exploration is complete. Produce the final code review now using only verified evidence already ' +
+  'collected. Report only actionable regressions introduced by this PR. For each finding include ' +
+  'severity, file:line, concrete failure mode, and smallest appropriate fix. Omit speculative or ' +
+  'pre-existing issues. If no findings meet that bar, say so.';
 
 /**
  * Pi coding agent for headless execution inside GitHub Actions.
@@ -463,12 +475,100 @@ export class Agent {
 
     this.workspaceBoundaryTracker.reset();
     let promptError: unknown;
+    let steeringError: unknown;
+    let runSettled = false;
+    let toolsDisabled = false;
+    const validateReviewBudget = (stage: string, seconds: number | undefined): void => {
+      if (
+        seconds !== undefined &&
+        (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > MAX_REVIEW_BUDGET_SECONDS)
+      ) {
+        throw new Error(
+          `${stage} review budget must be between 1 and ${MAX_REVIEW_BUDGET_SECONDS} seconds`
+        );
+      }
+    };
+    validateReviewBudget('convergence', this.config.convergeAfterSeconds);
+    validateReviewBudget('finalization', this.config.finalizeAfterSeconds);
+    if (
+      this.config.convergeAfterSeconds !== undefined &&
+      this.config.finalizeAfterSeconds !== undefined &&
+      this.config.convergeAfterSeconds >= this.config.finalizeAfterSeconds
+    ) {
+      throw new Error(
+        'convergence review budget must be less than finalization review budget when both are set'
+      );
+    }
+
+    const originalToolNames = this.config.finalizeAfterSeconds
+      ? this.session.getActiveToolNames()
+      : [];
+    const reviewBudgetTimers: ReturnType<typeof setTimeout>[] = [];
+    const reviewBudgetTasks = new Set<Promise<void>>();
+
+    const recordSteeringFailure = async (stage: string, error: unknown): Promise<void> => {
+      steeringError ??= new Error(`Failed to steer review during ${stage}`, { cause: error });
+      this.logger.error(
+        `[review-budget] ${stage} steering failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      try {
+        await this.session.abort();
+      } catch (abortError) {
+        this.logger.error(
+          `[review-budget] failed to abort session after steering error: ${abortError instanceof Error ? abortError.message : String(abortError)}`
+        );
+      }
+    };
+
+    const scheduleReviewBudget = (
+      seconds: number | undefined,
+      stage: string,
+      steer: () => Promise<void>
+    ): void => {
+      if (!seconds) {
+        return;
+      }
+      reviewBudgetTimers.push(
+        setTimeout(() => {
+          if (runSettled) {
+            return;
+          }
+          this.logger.info(`[review-budget] ${stage} threshold reached after ${seconds}s`);
+          const reviewBudgetTask = Promise.resolve()
+            .then(steer)
+            .catch(error => recordSteeringFailure(stage, error));
+          reviewBudgetTasks.add(reviewBudgetTask);
+        }, seconds * 1000)
+      );
+    };
+
+    scheduleReviewBudget(this.config.convergeAfterSeconds, 'convergence', () =>
+      this.session.steer(REVIEW_CONVERGENCE_PROMPT)
+    );
+    scheduleReviewBudget(this.config.finalizeAfterSeconds, 'finalization', async () => {
+      this.session.setActiveToolsByName([]);
+      toolsDisabled = true;
+      await this.session.steer(REVIEW_FINALIZATION_PROMPT);
+    });
+
     try {
       await this.session.prompt(text);
     } catch (error) {
       promptError = error;
+    } finally {
+      runSettled = true;
+      for (const timer of reviewBudgetTimers) {
+        clearTimeout(timer);
+      }
+      await Promise.allSettled([...reviewBudgetTasks]);
+      if (toolsDisabled) {
+        this.session.setActiveToolsByName(originalToolNames);
+      }
     }
 
+    if (steeringError) {
+      throw steeringError;
+    }
     if (promptError) {
       throw promptError;
     }

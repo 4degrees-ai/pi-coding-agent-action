@@ -235,6 +235,10 @@ export interface PiConfig extends DiffConfig {
    * - `string[]`: load only the listed tools (validated against available tools after extension loading)
    */
   loadedTools?: string[];
+  /** Seconds before steering a running review to stop broad exploration and converge. */
+  convergeAfterSeconds?: number;
+  /** Seconds before disabling tools and steering a running review to synthesize its result. */
+  finalizeAfterSeconds?: number;
   baseUrl?: string;
   exportSessionHtml?: boolean;
   exportSessionJsonl?: boolean;
