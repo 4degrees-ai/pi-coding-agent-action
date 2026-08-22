@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
+  createWorkspaceBoundaryTracker,
   createWorkspaceReadOnlyTools,
   validateWorkspaceRoot,
 } from '../../src/pi/workspace-read-only';
@@ -203,6 +204,53 @@ describe('workspace-read-only tools', () => {
     await expect(executeTool('ls', { path: 'outside-dir' })).rejects.toMatchObject({
       code: BOUNDARY_VIOLATION_CODE,
     });
+  });
+
+  test('records the tool and the refusal stage, and never the requested path', async () => {
+    const tracker = createWorkspaceBoundaryTracker();
+    const tools = createWorkspaceReadOnlyTools(workspaceRoot, tracker) as unknown as Tool[];
+    const toolFor = (name: string): Tool => {
+      const tool = tools.find(candidate => candidate.name === name);
+      if (!tool) {
+        throw new Error(`workspace-read-only tool not found: ${name}`);
+      }
+      return tool;
+    };
+
+    const escapingLink = path.join(workspaceRoot, 'escape-dir');
+    fs.symlinkSync(path.join(outsideRoot, 'secret-dir'), escapingLink, 'dir');
+
+    await expect(
+      toolFor('read').execute('r1', { path: '/proc/self/environ' })
+    ).rejects.toMatchObject({ code: BOUNDARY_VIOLATION_CODE });
+    await expect(toolFor('ls').execute('l1', { path: 'escape-dir' })).rejects.toMatchObject({
+      code: BOUNDARY_VIOLATION_CODE,
+    });
+
+    // A refusal that resolved out through a link is a different signal from an
+    // absolute path typed straight into the tool; triage needs to tell them apart.
+    expect(tracker.records).toEqual([
+      { tool: 'read', refusal: 'outside-workspace' },
+      { tool: 'ls', refusal: 'escaping-symlink' },
+    ]);
+    expect(JSON.stringify(tracker.records)).not.toContain('proc');
+    expect(JSON.stringify(tracker.records)).not.toContain(outsideRoot);
+  });
+
+  test('reset clears recorded refusals between runs', async () => {
+    const tracker = createWorkspaceBoundaryTracker();
+    const tools = createWorkspaceReadOnlyTools(workspaceRoot, tracker) as unknown as Tool[];
+    const read = tools.find(candidate => candidate.name === 'read')!;
+
+    await expect(read.execute('r1', { path: '/proc/self/environ' })).rejects.toMatchObject({
+      code: BOUNDARY_VIOLATION_CODE,
+    });
+    expect(tracker.records).toHaveLength(1);
+
+    tracker.reset();
+
+    expect(tracker.records).toHaveLength(0);
+    expect(tracker.violation).toBeUndefined();
   });
 
   test('makes a boundary violation observable for fail-closed callers', async () => {

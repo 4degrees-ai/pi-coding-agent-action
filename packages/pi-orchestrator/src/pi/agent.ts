@@ -447,8 +447,9 @@ export class Agent {
    * Run the agent with the given prompt and return the accumulated text response with session statistics.
    *
    * @param text - The prompt text to send. Must be non-empty.
-   * @returns The full assistant text response, session statistics, and any
-   *          session-level error that ended the run early.
+   * @returns The full assistant text response, session statistics, any
+   *          session-level error that ended the run early, and every workspace
+   *          boundary refusal recorded during the run.
    * @throws {Error} If `text` is falsy.
    */
   async run(text: string | undefined): Promise<PromptResult> {
@@ -468,11 +469,21 @@ export class Agent {
       promptError = error;
     }
 
-    if (this.workspaceBoundaryTracker.violation) {
-      throw this.workspaceBoundaryTracker.violation;
-    }
     if (promptError) {
       throw promptError;
+    }
+
+    // A refused path is already contained: the boundary wrapper rejects the
+    // call before the real tool runs, so nothing outside the workspace was
+    // ever read. The session that continued past it still produced work worth
+    // keeping, so the refusals travel back as data for the caller to annotate
+    // rather than as an error that discards the run.
+    const boundaryViolations = [...this.workspaceBoundaryTracker.records];
+    for (const violation of boundaryViolations) {
+      this.logger.warning(
+        `workspace boundary: refused a ${violation.tool} call (${violation.refusal}); ` +
+          'the path was not read'
+      );
     }
 
     // onPromptComplete is now routed through the agent_settled event
@@ -482,7 +493,7 @@ export class Agent {
     const sessionStats = this.collectSessionStats();
     const error = this.lastAgentError;
 
-    return { result, sessionStats, error };
+    return { result, sessionStats, error, boundaryViolations };
   }
 
   /**

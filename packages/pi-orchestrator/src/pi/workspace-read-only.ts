@@ -30,6 +30,21 @@ export const WORKSPACE_READ_ONLY_TOOL_NAMES = ['read', 'grep', 'find', 'ls'] as 
 
 export type WorkspaceReadOnlyToolName = (typeof WORKSPACE_READ_ONLY_TOOL_NAMES)[number];
 
+/**
+ * Why a path was refused. The requested path itself is never recorded: a
+ * rejected path can carry runner-internal detail, and the prompt that asked
+ * for it is repository-controlled. Tool name plus the stage that refused is
+ * enough to separate benign exploration (`ls` on an absolute system path)
+ * from a probe that followed a link out of the checkout.
+ */
+export type WorkspaceBoundaryRefusal = 'outside-workspace' | 'escaping-symlink';
+
+/** One refused tool call, safe to print and to publish as an action output. */
+export interface WorkspaceBoundaryViolationRecord {
+  tool: string;
+  refusal: WorkspaceBoundaryRefusal;
+}
+
 /** Error used to fail a run without exposing the rejected path in logs. */
 export class WorkspaceBoundaryViolation extends Error {
   readonly code = WORKSPACE_BOUNDARY_VIOLATION_CODE;
@@ -189,22 +204,30 @@ export function validateWorkspaceReadOnlyPolicy(options: WorkspaceReadOnlyPolicy
 /** Shared state between tool wrappers and the Agent run that owns them. */
 export interface WorkspaceBoundaryTracker {
   violation: WorkspaceBoundaryViolation | undefined;
-  recordViolation(): WorkspaceBoundaryViolation;
+  /** Every refusal in this run, in call order, for annotation and triage. */
+  records: readonly WorkspaceBoundaryViolationRecord[];
+  recordViolation(record: WorkspaceBoundaryViolationRecord): WorkspaceBoundaryViolation;
   reset(): void;
 }
 
 export function createWorkspaceBoundaryTracker(): WorkspaceBoundaryTracker {
   let violation: WorkspaceBoundaryViolation | undefined;
+  let records: WorkspaceBoundaryViolationRecord[] = [];
   return {
     get violation() {
       return violation;
     },
-    recordViolation() {
+    get records() {
+      return records;
+    },
+    recordViolation(record: WorkspaceBoundaryViolationRecord) {
       violation ??= new WorkspaceBoundaryViolation();
+      records.push(record);
       return violation;
     },
     reset() {
       violation = undefined;
+      records = [];
     },
   };
 }
@@ -253,7 +276,8 @@ export function validateWorkspaceRoot(
 async function canonicalizeRequestedPath(
   workspaceRoot: string,
   requestedPath: string | undefined,
-  tracker: WorkspaceBoundaryTracker
+  tracker: WorkspaceBoundaryTracker,
+  toolName: string
 ): Promise<string> {
   const rawPath = requestedPath === undefined || requestedPath === '' ? '.' : requestedPath;
   const lexicalPath = path.resolve(workspaceRoot, rawPath);
@@ -261,7 +285,7 @@ async function canonicalizeRequestedPath(
   // Reject obvious escapes before touching the filesystem. This also handles
   // paths that do not exist yet, where realpath() cannot canonicalize them.
   if (!isWithinWorkspace(workspaceRoot, lexicalPath)) {
-    throw tracker.recordViolation();
+    throw tracker.recordViolation({ tool: toolName, refusal: 'outside-workspace' });
   }
 
   let canonicalPath: string;
@@ -281,7 +305,7 @@ async function canonicalizeRequestedPath(
   }
 
   if (!isWithinWorkspace(workspaceRoot, canonicalPath)) {
-    throw tracker.recordViolation();
+    throw tracker.recordViolation({ tool: toolName, refusal: 'escaping-symlink' });
   }
 
   return canonicalPath;
@@ -313,7 +337,12 @@ function wrapToolWithWorkspaceBoundary(
         }
         requestedPath = originalParams.path;
       }
-      const canonicalPath = await canonicalizeRequestedPath(workspaceRoot, requestedPath, tracker);
+      const canonicalPath = await canonicalizeRequestedPath(
+        workspaceRoot,
+        requestedPath,
+        tracker,
+        definition.name
+      );
       const safeParams: PathParams = { ...originalParams, path: canonicalPath };
       return definition.execute(toolCallId, safeParams, signal, onUpdate, ctx);
     },

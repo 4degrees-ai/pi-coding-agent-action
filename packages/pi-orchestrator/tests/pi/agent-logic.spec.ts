@@ -507,6 +507,7 @@ describe('Agent', () => {
           version: expect.any(String),
         },
         error: undefined,
+        boundaryViolations: [],
       });
     });
 
@@ -528,6 +529,7 @@ describe('Agent', () => {
         result: '',
         sessionStats: undefined,
         error: undefined,
+        boundaryViolations: [],
       });
     });
 
@@ -554,6 +556,7 @@ describe('Agent', () => {
           version: expect.any(String),
         },
         error: undefined,
+        boundaryViolations: [],
       });
     });
 
@@ -580,6 +583,7 @@ describe('Agent', () => {
           version: expect.any(String),
         },
         error: undefined,
+        boundaryViolations: [],
       });
     });
 

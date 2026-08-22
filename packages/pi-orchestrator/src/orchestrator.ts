@@ -29,6 +29,7 @@ import { getActionVersion, formatActionVersion } from './version';
 import { MAX_GIST_CONTENT_BYTES, type CreatedGist, type GistProvider } from './share/gist';
 import { resolveGistProvider, resolveShareToken } from './share/provider';
 import { WORKSPACE_BOUNDARY_VIOLATION_CODE } from './pi/workspace-read-only';
+import type { WorkspaceBoundaryViolationRecord } from './pi/workspace-read-only';
 
 /**
  * Build the body of the success comment posted at the end of a run.
@@ -115,10 +116,9 @@ export class ActionOrchestrator {
       }
 
       pi = this.piAgentFactory(this.config, this.logger, this.platformProvider);
-      const { result, sessionStats, error } = await pi.run(prompt);
-      if (!(this.isWorkspaceReadOnly() && this.isWorkspaceBoundaryViolation(error))) {
-        this.outputSink.setOutput('raw_response', result);
-      }
+      const { result, sessionStats, error, boundaryViolations } = await pi.run(prompt);
+      this.outputSink.setOutput('raw_response', result);
+      this.reportBoundaryViolations(boundaryViolations);
 
       if (!this.isWorkspaceReadOnly()) {
         await this.runSessionExports(pi);
@@ -126,9 +126,6 @@ export class ActionOrchestrator {
       }
 
       if (error) {
-        if (this.isWorkspaceReadOnly() && this.isWorkspaceBoundaryViolation(error)) {
-          throw this.createWorkspaceBoundaryError();
-        }
         await this.handleSessionError(error, result, startTime, reaction, sessionStats);
         return;
       }
@@ -601,6 +598,32 @@ export class ActionOrchestrator {
     if (!this.isWorkspaceReadOnly()) {
       await this.git.createFinalComment(body, metadata);
     }
+  }
+
+  /**
+   * Publish the run's boundary refusals without failing it.
+   *
+   * Containment already happened at the tool call, so the finished response is
+   * still delivered. What the caller needs is the fact that a refusal occurred
+   * and enough shape to triage it — a reviewer probing for a tool it does not
+   * have looks nothing like one following a link out of the checkout.
+   */
+  private reportBoundaryViolations(
+    violations: readonly WorkspaceBoundaryViolationRecord[] | undefined
+  ): void {
+    const count = violations?.length ?? 0;
+    this.outputSink.setOutput('workspace_boundary_violations', String(count));
+    if (!violations || count === 0) {
+      this.outputSink.setOutput('workspace_boundary_violation_summary', '');
+      return;
+    }
+
+    const summary = violations.map(v => `${v.tool}:${v.refusal}`).join(', ');
+    this.outputSink.setOutput('workspace_boundary_violation_summary', summary);
+    this.logger.warning(
+      `workspace boundary: refused ${count} tool call(s) outside the review workspace ` +
+        `(${summary}). No path was read; the response is still delivered.`
+    );
   }
 
   private isWorkspaceReadOnly(): boolean {
