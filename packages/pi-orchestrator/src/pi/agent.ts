@@ -29,6 +29,7 @@ import {
   createWorkspaceBoundaryTracker,
   createWorkspaceReadOnlyResourceLoader,
   createWorkspaceReadOnlyTools,
+  validateWorkspaceReadOnlyPolicy,
   validateWorkspaceRoot,
   WORKSPACE_READ_ONLY_TOOL_NAMES,
 } from './workspace-read-only';
@@ -162,7 +163,14 @@ export class Agent {
       : undefined;
 
     if (hardened) {
-      this.validateWorkspaceReadOnlyConfig();
+      validateWorkspaceReadOnlyPolicy({
+        extensions: this.config.extensions,
+        loadBuiltinExtensions: this.config.loadBuiltinExtensions,
+        loadedTools: this.config.loadedTools,
+        exportSessionHtml: this.config.exportSessionHtml,
+        exportSessionJsonl: this.config.exportSessionJsonl,
+        shareSession: this.config.shareSession,
+      });
     }
 
     const settingsManager = hardened ? SettingsManager.inMemory() : SettingsManager.create(cwd);
@@ -746,37 +754,6 @@ export class Agent {
     // Resource loading is disabled in hardened mode, so this prompt is the
     // only system-level review guidance that reaches the model.
     return getSystemPrompt(this.platformProvider.type);
-  }
-
-  private validateWorkspaceReadOnlyConfig(): void {
-    const loadedTools = this.config.loadedTools;
-    const expected = new Set<string>(WORKSPACE_READ_ONLY_TOOL_NAMES);
-    const actual = loadedTools ? new Set(loadedTools) : undefined;
-    const exactTools =
-      actual?.size === expected.size && [...expected].every(toolName => actual.has(toolName));
-
-    if (this.config.extensions?.length) {
-      throw new Error('extensions cannot be used with isolation_mode workspace-read-only');
-    }
-    if (this.config.loadBuiltinExtensions !== false) {
-      throw new Error(
-        'load_builtin_extensions must be false with isolation_mode workspace-read-only'
-      );
-    }
-    if (!exactTools) {
-      throw new Error(
-        'loaded_tools must contain exactly read, grep, find, and ls with isolation_mode workspace-read-only'
-      );
-    }
-    if (
-      this.config.exportSessionHtml ||
-      this.config.exportSessionJsonl ||
-      this.config.shareSession
-    ) {
-      throw new Error(
-        'session exports and sharing are disabled with isolation_mode workspace-read-only'
-      );
-    }
   }
 
   private assertSessionExportsEnabled(): void {

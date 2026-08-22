@@ -91,7 +91,7 @@ export class WorkspaceReadOnlyResourceLoader implements ResourceLoader {
       setModel: async () => false,
       getThinkingLevel: () => 'off',
       setThinkingLevel: noopResourceAction,
-    } as LoadExtensionsResult['runtime'],
+    },
   };
 
   constructor(private readonly trustedSystemPrompt: string) {}
@@ -145,6 +145,45 @@ export function createWorkspaceReadOnlyResourceLoader(
   trustedSystemPrompt: string
 ): WorkspaceReadOnlyResourceLoader {
   return new WorkspaceReadOnlyResourceLoader(trustedSystemPrompt);
+}
+
+export interface WorkspaceReadOnlyPolicyOptions {
+  extensions?: string[] | undefined;
+  loadBuiltinExtensions?: boolean | undefined;
+  loadedTools?: string[] | undefined;
+  exportSessionHtml?: boolean | undefined;
+  exportSessionJsonl?: boolean | undefined;
+  shareSession?: boolean | undefined;
+}
+
+/** Validate the policy inputs required by workspace-read-only mode. */
+export function validateWorkspaceReadOnlyPolicy(options: WorkspaceReadOnlyPolicyOptions): void {
+  if (options.extensions?.length) {
+    throw new Error('extensions cannot be used with isolation_mode workspace-read-only');
+  }
+
+  if (options.loadBuiltinExtensions !== false) {
+    throw new Error(
+      'load_builtin_extensions must be false with isolation_mode workspace-read-only'
+    );
+  }
+
+  const expectedTools = new Set<string>(WORKSPACE_READ_ONLY_TOOL_NAMES);
+  const requestedTools = options.loadedTools ? new Set(options.loadedTools) : undefined;
+  const exactToolSet =
+    requestedTools?.size === expectedTools.size &&
+    [...expectedTools].every(toolName => requestedTools.has(toolName));
+  if (!exactToolSet) {
+    throw new Error(
+      'loaded_tools must contain exactly read, grep, find, and ls with isolation_mode workspace-read-only'
+    );
+  }
+
+  if (options.exportSessionHtml || options.exportSessionJsonl || options.shareSession) {
+    throw new Error(
+      'session exports and sharing are disabled with isolation_mode workspace-read-only'
+    );
+  }
 }
 
 /** Shared state between tool wrappers and the Agent run that owns them. */
@@ -267,11 +306,14 @@ function wrapToolWithWorkspaceBoundary(
     async execute(...args: AnyToolExecuteArgs) {
       const [toolCallId, params, signal, onUpdate, ctx] = args;
       const originalParams = params as PathParams;
-      const canonicalPath = await canonicalizeRequestedPath(
-        workspaceRoot,
-        typeof originalParams.path === 'string' ? originalParams.path : undefined,
-        tracker
-      );
+      let requestedPath: string | undefined;
+      if ('path' in originalParams) {
+        if (typeof originalParams.path !== 'string') {
+          throw new TypeError('workspace-read-only requires path to be a string when provided');
+        }
+        requestedPath = originalParams.path;
+      }
+      const canonicalPath = await canonicalizeRequestedPath(workspaceRoot, requestedPath, tracker);
       const safeParams: PathParams = { ...originalParams, path: canonicalPath };
       return definition.execute(toolCallId, safeParams, signal, onUpdate, ctx);
     },
@@ -297,32 +339,4 @@ export function createWorkspaceReadOnlyTools(
   return definitions.map(definition =>
     wrapToolWithWorkspaceBoundary(definition, canonicalRoot, tracker)
   );
-}
-
-/**
- * Resource-loader options for hardened mode. Every repository-controlled
- * resource source is disabled; the only prompt text is supplied by the
- * trusted caller.
- */
-export function buildWorkspaceReadOnlyResourceLoaderOptions(options: {
-  cwd: string;
-  systemPrompt: string;
-}) {
-  return {
-    cwd: options.cwd,
-    noExtensions: true,
-    noSkills: true,
-    noPromptTemplates: true,
-    noThemes: true,
-    noContextFiles: true,
-    extensionFactories: [],
-    additionalExtensionPaths: [],
-    additionalSkillPaths: [],
-    additionalPromptTemplatePaths: [],
-    additionalThemePaths: [],
-    systemPrompt: options.systemPrompt,
-    appendSystemPrompt: [],
-    systemPromptOverride: () => options.systemPrompt,
-    appendSystemPromptOverride: () => [],
-  };
 }
