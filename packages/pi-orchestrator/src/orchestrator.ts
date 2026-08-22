@@ -235,7 +235,7 @@ export class ActionOrchestrator {
     pi?: PiAgent
   ): Promise<void> {
     if (this.isWorkspaceReadOnly() && this.isWorkspaceBoundaryViolation(e)) {
-      this.outputSink.setFailed(this.createWorkspaceBoundaryError(e));
+      this.outputSink.setFailed(this.createWorkspaceBoundaryError());
       return;
     }
 
@@ -640,14 +640,7 @@ export class ActionOrchestrator {
     return 'code' in error && error.code === WORKSPACE_BOUNDARY_VIOLATION_CODE;
   }
 
-  private createWorkspaceBoundaryError(candidateError?: unknown): Error & { code: string } {
-    if (
-      candidateError instanceof Error &&
-      'code' in candidateError &&
-      candidateError.code === WORKSPACE_BOUNDARY_VIOLATION_CODE
-    ) {
-      return candidateError as Error & { code: string };
-    }
+  private createWorkspaceBoundaryError(): Error & { code: string } {
     const error = new Error(
       'workspace boundary violation: requested path is outside the review workspace'
     ) as Error & { code: string };

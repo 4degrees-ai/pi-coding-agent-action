@@ -43,10 +43,10 @@ export type {
 } from './pi/logging';
 export { resolveExtensions, getResourceLoader } from './pi/resource-loader';
 export {
-  buildWorkspaceReadOnlyResourceLoaderOptions,
   createWorkspaceBoundaryTracker,
   createWorkspaceReadOnlyResourceLoader,
   createWorkspaceReadOnlyTools,
+  validateWorkspaceReadOnlyPolicy,
   validateWorkspaceRoot,
   WORKSPACE_BOUNDARY_VIOLATION_CODE,
   WORKSPACE_PATH_UNAVAILABLE_CODE,
@@ -55,6 +55,7 @@ export {
   WorkspacePathUnavailable,
   WorkspaceReadOnlyResourceLoader,
 } from './pi/workspace-read-only';
+export type { WorkspaceReadOnlyPolicyOptions } from './pi/workspace-read-only';
 export { getSystemPrompt, getSupportedPlatforms, SYSTEM_PROMPT } from './pi/prompt';
 export { createPRToolFactory } from './pi/tools/create-pr';
 export { createReviewToolFactory } from './pi/tools/create-review';
