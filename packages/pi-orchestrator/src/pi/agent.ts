@@ -78,6 +78,17 @@ type SummarizationRetryAttemptStartEvent = Extract<
  */
 const MODEL_REFRESH_TIMEOUT_MS = 15_000;
 
+const REVIEW_CONVERGENCE_PROMPT =
+  'The convergence threshold has been reached. Stop opening new investigative branches. Review ' +
+  'coverage of the changed files, choose the highest-risk unresolved hypotheses, and use the ' +
+  'remaining tool calls only to confirm or reject those findings.';
+
+const REVIEW_FINALIZATION_PROMPT =
+  'Exploration is complete. Produce the final code review now using only verified evidence already ' +
+  'collected. Report only actionable regressions introduced by this PR. For each finding include ' +
+  'severity, file:line, concrete failure mode, and smallest appropriate fix. Omit speculative or ' +
+  'pre-existing issues. If no findings meet that bar, say so.';
+
 /**
  * Pi coding agent for headless execution inside GitHub Actions.
  *
@@ -455,12 +466,71 @@ export class Agent {
 
     this.workspaceBoundaryTracker.reset();
     let promptError: unknown;
+    let steeringError: unknown;
+    let runSettled = false;
+    let toolsDisabled = false;
+    const originalToolNames = this.config.finalizeAfterSeconds
+      ? this.session.getActiveToolNames()
+      : [];
+    const reviewBudgetTimers: ReturnType<typeof setTimeout>[] = [];
+
+    const recordSteeringFailure = (stage: string, error: unknown): void => {
+      steeringError = new Error(`Failed to steer review during ${stage}`, { cause: error });
+      this.logger.error(
+        `[review-budget] ${stage} steering failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      void this.session.abort().catch(abortError => {
+        this.logger.error(
+          `[review-budget] failed to abort session after steering error: ${abortError instanceof Error ? abortError.message : String(abortError)}`
+        );
+      });
+    };
+
+    const scheduleReviewBudget = (
+      seconds: number | undefined,
+      stage: string,
+      steer: () => Promise<void>
+    ): void => {
+      if (!seconds) {
+        return;
+      }
+      reviewBudgetTimers.push(
+        setTimeout(() => {
+          if (runSettled) {
+            return;
+          }
+          this.logger.info(`[review-budget] ${stage} threshold reached after ${seconds}s`);
+          void steer().catch(error => recordSteeringFailure(stage, error));
+        }, seconds * 1000)
+      );
+    };
+
+    scheduleReviewBudget(this.config.convergeAfterSeconds, 'convergence', () =>
+      this.session.steer(REVIEW_CONVERGENCE_PROMPT)
+    );
+    scheduleReviewBudget(this.config.finalizeAfterSeconds, 'finalization', async () => {
+      this.session.setActiveToolsByName([]);
+      toolsDisabled = true;
+      await this.session.steer(REVIEW_FINALIZATION_PROMPT);
+    });
+
     try {
       await this.session.prompt(text);
     } catch (error) {
       promptError = error;
+    } finally {
+      runSettled = true;
+      for (const timer of reviewBudgetTimers) {
+        clearTimeout(timer);
+      }
+      if (toolsDisabled) {
+        this.session.setActiveToolsByName(originalToolNames);
+      }
     }
 
+    if (steeringError) {
+      throw steeringError;
+    }
     if (promptError) {
       throw promptError;
     }

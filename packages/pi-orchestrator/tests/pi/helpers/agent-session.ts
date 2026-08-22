@@ -26,7 +26,11 @@ export interface MockSession {
     tokens: { input: number; output: number; total: number };
     cost: number;
   };
-  prompt: () => Promise<void>;
+  prompt: (text?: string) => Promise<void>;
+  steer: (text: string) => Promise<void>;
+  getActiveToolNames: () => string[];
+  setActiveToolsByName: (toolNames: string[]) => void;
+  abort: () => Promise<void>;
   subscribe: (listener: (event: MockSessionEvent) => void) => void;
   state: {
     messages: Record<string, unknown>[];
@@ -44,6 +48,8 @@ export interface MockSessionOptions {
    * after construction.
    */
   suppressEvents?: boolean;
+  /** Tool names returned by `getActiveToolNames()`. */
+  activeToolNames?: string[];
 }
 
 /**
@@ -60,6 +66,7 @@ export interface MockSessionOptions {
 export function buildMockSession(options: MockSessionOptions): MockSession {
   const { input = 100, output = 50, total, cost = 0.001 } = options.stats ?? {};
   let listener: ((event: MockSessionEvent) => void) | undefined;
+  let activeToolNames = [...(options.activeToolNames ?? ['read', 'grep', 'find', 'ls'])];
 
   return {
     getSessionStats: () => ({
@@ -76,6 +83,12 @@ export function buildMockSession(options: MockSessionOptions): MockSession {
         listener({ type: 'agent_settled' });
       }
     },
+    steer: async () => {},
+    getActiveToolNames: () => [...activeToolNames],
+    setActiveToolsByName: (toolNames: string[]) => {
+      activeToolNames = [...toolNames];
+    },
+    abort: async () => {},
     subscribe: (cb: (event: MockSessionEvent) => void) => {
       listener = cb;
     },

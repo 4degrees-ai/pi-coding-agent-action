@@ -129,6 +129,21 @@ export function validateRequiredInputs(provider: string, model: string): void {
   }
 }
 
+function validateReviewBudgets(
+  convergeAfterSeconds: number | undefined,
+  finalizeAfterSeconds: number | undefined
+): void {
+  if (
+    convergeAfterSeconds !== undefined &&
+    finalizeAfterSeconds !== undefined &&
+    convergeAfterSeconds >= finalizeAfterSeconds
+  ) {
+    throw new Error(
+      '`converge_after_seconds` must be less than `finalize_after_seconds` when both are set.'
+    );
+  }
+}
+
 function validateWorkspaceReadOnlyInputs(
   isolationMode: string,
   extensions: string[] | undefined,
@@ -259,6 +274,9 @@ export function gatherActionsConfig(): PiConfig {
   const diffMaxLines = parsePositiveIntInput(core.getInput('diff_max_lines'));
   const diffMaxBytes = parsePositiveIntInput(core.getInput('diff_max_bytes'));
   const prNumber = parsePositiveIntInput(core.getInput('pr_number'));
+  const convergeAfterSeconds = parsePositiveIntInput(core.getInput('converge_after_seconds'));
+  const finalizeAfterSeconds = parsePositiveIntInput(core.getInput('finalize_after_seconds'));
+  validateReviewBudgets(convergeAfterSeconds, finalizeAfterSeconds);
 
   // --- Session sharing inputs --------------------------------------------
   const githubToken = core.getInput('github_token') || undefined;
@@ -292,5 +310,7 @@ export function gatherActionsConfig(): PiConfig {
     ...(diffMaxBytes ? { diffMaxBytes } : {}),
     ...(diffIgnorePatterns?.length ? { diffIgnorePatterns } : {}),
     ...(prNumber ? { prNumber } : {}),
+    ...(convergeAfterSeconds ? { convergeAfterSeconds } : {}),
+    ...(finalizeAfterSeconds ? { finalizeAfterSeconds } : {}),
   };
 }
