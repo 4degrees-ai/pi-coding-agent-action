@@ -51,7 +51,7 @@ inputs:
     default: 'all'
 
   isolation_mode:
-    description: 'Optional execution isolation. workspace-read-only disables repository extensions and GitHub mutations, and exposes only read, grep, find, and ls inside GITHUB_WORKSPACE.'
+    description: 'Optional execution isolation. workspace-read-only disables repository extensions and GitHub mutations, and exposes only read, grep, find, and ls inside GITHUB_WORKSPACE. It requires load_builtin_extensions: false, loaded_tools to contain exactly read, grep, find, and ls, and export_session_html: false, export_session_jsonl: false, and share_session: false; invalid companion settings are rejected.'
     required: false
     default: ''
 

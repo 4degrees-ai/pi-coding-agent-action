@@ -960,7 +960,16 @@ describe('ActionOrchestrator', () => {
       await expect(orchestrator.execute()).rejects.toMatchObject({
         code: 'WORKSPACE_BOUNDARY_VIOLATION',
       });
-      expect(mockOutputSink.setFailed).toHaveBeenCalledWith(boundaryError);
+      const failedCalls = (mockOutputSink.setFailed as unknown as { mock: { calls: unknown[][] } })
+        .mock.calls;
+      const failedError = failedCalls[0]?.[0];
+      expect(failedError).toBeInstanceOf(Error);
+      expect(failedError).not.toBe(boundaryError);
+      expect(failedError).toMatchObject({
+        code: 'WORKSPACE_BOUNDARY_VIOLATION',
+        message: 'workspace boundary violation: requested path is outside the review workspace',
+      });
+      expect(String(failedError)).not.toContain('/proc');
       expect(mockGit.createFinalComment).not.toHaveBeenCalled();
       expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('response', expect.anything());
       expect(mockOutputSink.setOutput).not.toHaveBeenCalledWith('raw_response', expect.anything());

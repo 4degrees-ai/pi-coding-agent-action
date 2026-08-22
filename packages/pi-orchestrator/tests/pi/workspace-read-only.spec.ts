@@ -12,7 +12,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
-  buildWorkspaceReadOnlyResourceLoaderOptions,
   createWorkspaceBoundaryTracker,
   createWorkspaceReadOnlyTools,
   validateWorkspaceRoot,
@@ -99,6 +98,43 @@ describe('workspace-read-only tools', () => {
     const ls = await executeTool('ls', { path: 'src/nested' });
 
     expect(contentText(ls)).toContain('review.ts');
+  });
+
+  test('grep accepts a path inside the workspace', async () => {
+    const grep = await executeTool('grep', {
+      pattern: 'reviewFinding',
+      path: 'src/nested',
+    });
+
+    expect(contentText(grep)).toContain('review.ts');
+    expect(contentText(grep)).toContain('reviewFinding');
+  });
+
+  test('find accepts a path inside the workspace', async () => {
+    const find = await executeTool('find', { pattern: '*.ts', path: 'src/nested' });
+
+    expect(contentText(find)).toContain('review.ts');
+  });
+
+  test.each([
+    ['read', { path: 42 }],
+    ['grep', { pattern: 'reviewFinding', path: 42 }],
+    ['find', { pattern: '*', path: 42 }],
+    ['ls', { path: 42 }],
+  ])('%s rejects a provided non-string path without echoing it', async (name, params) => {
+    const error = await executeTool(name, params).catch(reason => reason);
+
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error).toMatchObject({
+      message: 'workspace-read-only requires path to be a string when provided',
+    });
+    expect(String(error.message)).not.toContain('42');
+  });
+
+  test('ls accepts an omitted path and defaults to the workspace root', async () => {
+    const ls = await executeTool('ls', {});
+
+    expect(contentText(ls)).toContain('src');
   });
 
   test.each(['read', 'grep', 'find', 'ls'])(
@@ -252,28 +288,5 @@ describe('workspace-read-only root validation', () => {
     expect(() => validateWorkspaceRoot(root, mismatchedCwd)).toThrow(
       /action working directory.*GITHUB_WORKSPACE/i
     );
-  });
-});
-
-describe('workspace-read-only resource loader', () => {
-  test('disables all executable and repository-controlled resource discovery', async () => {
-    const options = await buildWorkspaceReadOnlyResourceLoaderOptions({
-      cwd: '/tmp/review-workspace',
-      systemPrompt: 'trusted review rubric',
-    });
-
-    expect(options).toMatchObject({
-      noExtensions: true,
-      noSkills: true,
-      noPromptTemplates: true,
-      noThemes: true,
-      noContextFiles: true,
-      additionalExtensionPaths: [],
-      additionalSkillPaths: [],
-      additionalPromptTemplatePaths: [],
-      additionalThemePaths: [],
-    });
-    expect(options.systemPrompt).toBe('trusted review rubric');
-    expect(options.appendSystemPrompt).toEqual([]);
   });
 });

@@ -18,6 +18,7 @@
  */
 
 import * as core from '@actions/core';
+import { validateWorkspaceReadOnlyPolicy } from '@alexanderfortin/pi-orchestrator';
 import type { PiConfig } from '@alexanderfortin/pi-orchestrator';
 
 // ---------------------------------------------------------------------------
@@ -37,7 +38,6 @@ export const MISSING_MODEL_MESSAGE =
   'See https://github.com/shaftoe/pi-coding-agent-action#usage for details.';
 
 const WORKSPACE_READ_ONLY_MODE = 'workspace-read-only';
-const WORKSPACE_READ_ONLY_TOOLS = ['read', 'grep', 'find', 'ls'] as const;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers (pure functions)
@@ -149,32 +149,14 @@ function validateWorkspaceReadOnlyInputs(
     );
   }
 
-  if (extensions?.length) {
-    throw new Error(`extensions cannot be used with isolation_mode ${WORKSPACE_READ_ONLY_MODE}`);
-  }
-
-  if (loadBuiltinExtensions) {
-    throw new Error(
-      `load_builtin_extensions must be false with isolation_mode ${WORKSPACE_READ_ONLY_MODE}`
-    );
-  }
-
-  const expectedTools = new Set<string>(WORKSPACE_READ_ONLY_TOOLS);
-  const requestedTools = loadedTools ? new Set(loadedTools) : undefined;
-  const exactToolSet =
-    requestedTools?.size === expectedTools.size &&
-    [...expectedTools].every(toolName => requestedTools.has(toolName));
-  if (!exactToolSet) {
-    throw new Error(
-      `loaded_tools must contain exactly read, grep, find, and ls with isolation_mode ${WORKSPACE_READ_ONLY_MODE}`
-    );
-  }
-
-  if (exportSessionHtml || exportSessionJsonl || shareSession) {
-    throw new Error(
-      `session exports and sharing are disabled with isolation_mode ${WORKSPACE_READ_ONLY_MODE}`
-    );
-  }
+  validateWorkspaceReadOnlyPolicy({
+    extensions,
+    loadBuiltinExtensions,
+    loadedTools,
+    exportSessionHtml,
+    exportSessionJsonl,
+    shareSession,
+  });
 }
 
 // ---------------------------------------------------------------------------
