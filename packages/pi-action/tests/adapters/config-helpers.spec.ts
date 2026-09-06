@@ -16,6 +16,7 @@ import {
   parseLoadedTools,
   parsePositiveIntInput,
   parseStringListInput,
+  validateApiKeyHeader,
   validateRequiredInputs,
 } from '../../src/adapters/config';
 
@@ -166,4 +167,42 @@ describe('validateRequiredInputs', () => {
     expect(MISSING_MODEL_MESSAGE).toMatch(/claude-sonnet-4-5/);
     expect(MISSING_MODEL_MESSAGE).toMatch(/gpt-4o/);
   });
+});
+
+describe('validateApiKeyHeader', () => {
+  test('accepts an empty header when provider auth uses the normal token path', () => {
+    expect(() => validateApiKeyHeader('', 'test-token')).not.toThrow();
+  });
+
+  test('accepts a valid HTTP token header name when a token is present', () => {
+    expect(() => validateApiKeyHeader('LUNAROUTE-API-KEY', 'test-token')).not.toThrow();
+  });
+
+  test('accepts a common X-API-KEY gateway header', () => {
+    expect(() => validateApiKeyHeader('X-API-KEY', 'test-token')).not.toThrow();
+  });
+
+  test.each(['X API Key', 'X\r\nInjected', ':authority'])(
+    'rejects invalid header name %s',
+    name => {
+      expect(() => validateApiKeyHeader(name, 'test-token')).toThrow(
+        '`api_key_header` must be a valid HTTP token header name'
+      );
+    }
+  );
+
+  test('requires a token when a custom header is configured', () => {
+    expect(() => validateApiKeyHeader('LUNAROUTE-API-KEY', '')).toThrow(
+      '`api_key_header` requires a non-empty `token` input'
+    );
+  });
+
+  test.each(['Authorization', 'authorization', 'AUTHORIZATION'])(
+    'rejects the provider-owned Authorization header name %s',
+    name => {
+      expect(() => validateApiKeyHeader(name, 'test-token')).toThrow(
+        '`api_key_header` cannot be `Authorization` because it collides with provider authentication'
+      );
+    }
+  );
 });

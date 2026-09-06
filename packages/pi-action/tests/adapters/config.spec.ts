@@ -74,6 +74,12 @@ describe('gatherActionsConfig', () => {
       mockCore({ provider: 'google-vertex', model: 'gemini-2.5-pro', token: '' });
       const config = gatherActionsConfig();
       expect(config.token).toBe('');
+      expect(coreMock.setSecret).not.toHaveBeenCalled();
+    });
+
+    test('registers a non-empty provider token as a secret without a custom header', () => {
+      gatherActionsConfig();
+      expect(coreMock.setSecret).toHaveBeenCalledWith('test-token');
     });
   });
 
@@ -250,6 +256,43 @@ describe('gatherActionsConfig', () => {
     });
   });
 
+  describe('custom API key header', () => {
+    test('omits apiKeyHeader when the input is empty', () => {
+      mockCore({ api_key_header: '' });
+      expect(gatherActionsConfig().apiKeyHeader).toBeUndefined();
+    });
+
+    test('preserves the configured header name and masks its token', () => {
+      mockCore({ api_key_header: 'LUNAROUTE-API-KEY', token: 'token-without-bearer' });
+      const config = gatherActionsConfig();
+
+      expect(config.apiKeyHeader).toBe('LUNAROUTE-API-KEY');
+      expect(config.token).toBe('token-without-bearer');
+      expect(coreMock.setSecret).toHaveBeenCalledWith('token-without-bearer');
+    });
+
+    test('rejects a custom header without a token', () => {
+      mockCore({ api_key_header: 'LUNAROUTE-API-KEY', token: '' });
+      expect(() => gatherActionsConfig()).toThrow(
+        '`api_key_header` requires a non-empty `token` input'
+      );
+    });
+
+    test('rejects an invalid HTTP token header name', () => {
+      mockCore({ api_key_header: 'X API Key' });
+      expect(() => gatherActionsConfig()).toThrow(
+        '`api_key_header` must be a valid HTTP token header name'
+      );
+    });
+
+    test('rejects the provider-owned Authorization header name case-insensitively', () => {
+      mockCore({ api_key_header: 'aUtHoRiZaTiOn' });
+      expect(() => gatherActionsConfig()).toThrow(
+        '`api_key_header` cannot be `Authorization` because it collides with provider authentication'
+      );
+    });
+  });
+
   describe('session sharing inputs', () => {
     test('share_session defaults to false', () => {
       expect(gatherActionsConfig().shareSession).toBe(false);
@@ -287,7 +330,7 @@ describe('gatherActionsConfig', () => {
     test('does not call setSecret when github_token is empty', () => {
       mockCore({ github_token: '' });
       gatherActionsConfig();
-      expect(coreMock.setSecret).not.toHaveBeenCalled();
+      expect(coreMock.setSecret).not.toHaveBeenCalledWith('');
     });
 
     test('share_gist_provider defaults to undefined (github)', () => {

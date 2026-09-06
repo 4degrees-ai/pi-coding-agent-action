@@ -18,8 +18,13 @@
  */
 
 import * as core from '@actions/core';
-import { validateWorkspaceReadOnlyPolicy } from '@alexanderfortin/pi-orchestrator';
+import {
+  validateApiKeyHeader,
+  validateWorkspaceReadOnlyPolicy,
+} from '@alexanderfortin/pi-orchestrator';
 import type { PiConfig } from '@alexanderfortin/pi-orchestrator';
+
+export { validateApiKeyHeader } from '@alexanderfortin/pi-orchestrator';
 
 // ---------------------------------------------------------------------------
 // Error message constants — keep stable; they are part of the public
@@ -224,7 +229,15 @@ export function gatherActionsConfig(): PiConfig {
   const promptInput = core.getInput('prompt');
   const thinkingLevel = core.getInput('thinking_level') ?? 'off';
   const baseUrl = core.getInput('base_url') || undefined;
+  const apiKeyHeader = core.getInput('api_key_header').trim();
   const isolationMode = core.getInput('isolation_mode').trim();
+
+  validateApiKeyHeader(apiKeyHeader, token);
+  if (token) {
+    // Register every provider token for Actions log masking, including when
+    // the provider uses its normal authentication header.
+    core.setSecret(token);
+  }
 
   // --- Optional list inputs ----------------------------------------------
   const extensions = parseStringListInput(core.getInput('extensions'), '\n');
@@ -306,6 +319,7 @@ export function gatherActionsConfig(): PiConfig {
     loadBuiltinExtensions,
     ...(loadedTools ? { loadedTools } : {}),
     ...(baseUrl ? { baseUrl } : {}),
+    ...(apiKeyHeader ? { apiKeyHeader } : {}),
     exportSessionHtml,
     exportSessionJsonl,
     autoCompaction,

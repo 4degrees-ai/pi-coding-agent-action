@@ -816,6 +816,7 @@ For complex, multi-step tasks that generate a lot of context (e.g. large code re
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `auto_compaction` | Enable automatic context compaction when the conversation grows too large for the model's context window. Pi summarizes older messages to free up context space | No | `false` |
+| `api_key_header` | Optional HTTP header name for sending the `token` to a gateway (for example, `LUNAROUTE-API-KEY`). When set, a non-empty `token` is required and is sent verbatim in this header in addition to the provider's normal auth. `Authorization` (case-insensitive) is reserved for provider authentication | No | - |
 | `base_url` | Optional override for the provider base URL (e.g., to route traffic through a proxy or use an OpenAI-compatible gateway) | No | - |
 | `branch_name_template` | Template for auto-generated branch names in `create_pull_request`. Supports variables: `{number}` (issue/PR number), `{timestamp}` (epoch ms), `{title}` (slugified PR title). Default: `pi/issue{number}-{timestamp}` | No | - |
 | `converge_after_seconds` | After this many seconds (1–2147483), keep tools enabled but steer the agent to stop broad exploration and validate its highest-risk unresolved findings | No | - |

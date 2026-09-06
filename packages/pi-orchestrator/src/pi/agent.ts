@@ -79,6 +79,32 @@ type SummarizationRetryAttemptStartEvent = Extract<
  */
 const MODEL_REFRESH_TIMEOUT_MS = 15_000;
 const MAX_REVIEW_BUDGET_SECONDS = 2_147_483;
+const HTTP_TOKEN_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
+
+/**
+ * Validate the optional header used to carry the provider token.
+ *
+ * `Authorization` is reserved for the provider's normal authentication path;
+ * allowing a custom header with the same name would make the two credentials
+ * collide in the request. Other valid token names remain available for
+ * gateways, including `LUNAROUTE-API-KEY` and `X-API-KEY`.
+ */
+export function validateApiKeyHeader(apiKeyHeader: string, token: string): void {
+  if (!apiKeyHeader) {
+    return;
+  }
+  if (!HTTP_TOKEN_HEADER_NAME.test(apiKeyHeader)) {
+    throw new Error('`api_key_header` must be a valid HTTP token header name.');
+  }
+  if (apiKeyHeader.toLowerCase() === 'authorization') {
+    throw new Error(
+      '`api_key_header` cannot be `Authorization` because it collides with provider authentication.'
+    );
+  }
+  if (!token) {
+    throw new Error('`api_key_header` requires a non-empty `token` input.');
+  }
+}
 
 const REVIEW_CONVERGENCE_PROMPT =
   'The convergence threshold has been reached. Stop opening new investigative branches. Review ' +
@@ -168,6 +194,8 @@ export class Agent {
    */
   // fallow-ignore-next-line complexity
   async ready(): Promise<Agent> {
+    validateApiKeyHeader(this.config.apiKeyHeader ?? '', this.config.token);
+
     const cwd = this.config.cwd ?? process.cwd();
     const hardened = this.config.isolationMode === 'workspace-read-only';
     const workspaceRoot = hardened
@@ -260,7 +288,20 @@ export class Agent {
     // pi.registerProvider() will have populated the model registry by now.
     const foundModel = this.modelRuntime.getModel(this.config.provider, this.config.model);
     if (foundModel) {
-      this.model = foundModel;
+      if (this.config.apiKeyHeader) {
+        // Model.headers is part of the SDK request contract. Clone the
+        // resolved model so the catalog remains unchanged, and merge into any
+        // inherited headers before the model is handed to the session.
+        this.model = {
+          ...foundModel,
+          headers: {
+            ...(foundModel.headers ?? {}),
+            [this.config.apiKeyHeader]: this.config.token,
+          },
+        };
+      } else {
+        this.model = foundModel;
+      }
     } else {
       throw new Error(
         `Model not found: ${this.config.provider}/${this.config.model}. ` +
