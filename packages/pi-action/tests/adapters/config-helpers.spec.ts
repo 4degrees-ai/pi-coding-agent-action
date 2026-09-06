@@ -178,6 +178,10 @@ describe('validateApiKeyHeader', () => {
     expect(() => validateApiKeyHeader('LUNAROUTE-API-KEY', 'test-token')).not.toThrow();
   });
 
+  test('accepts a common X-API-KEY gateway header', () => {
+    expect(() => validateApiKeyHeader('X-API-KEY', 'test-token')).not.toThrow();
+  });
+
   test.each(['X API Key', 'X\r\nInjected', ':authority'])(
     'rejects invalid header name %s',
     name => {
@@ -192,4 +196,13 @@ describe('validateApiKeyHeader', () => {
       '`api_key_header` requires a non-empty `token` input'
     );
   });
+
+  test.each(['Authorization', 'authorization', 'AUTHORIZATION'])(
+    'rejects the provider-owned Authorization header name %s',
+    name => {
+      expect(() => validateApiKeyHeader(name, 'test-token')).toThrow(
+        '`api_key_header` cannot be `Authorization` because it collides with provider authentication'
+      );
+    }
+  );
 });

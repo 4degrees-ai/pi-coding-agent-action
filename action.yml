@@ -22,7 +22,7 @@ inputs:
     required: false
 
   api_key_header:
-    description: 'Optional HTTP header name for sending the token to a gateway (for example, LUNAROUTE-API-KEY). When set, token is required and is sent verbatim in this header in addition to the provider''s normal auth.'
+    description: 'Optional HTTP header name for sending the token to a gateway (for example, LUNAROUTE-API-KEY). When set, a non-empty token is required and is sent verbatim in this header in addition to the provider''s normal auth. Authorization (case-insensitive) is reserved for provider authentication.'
     required: false
     default: ''
 

@@ -74,6 +74,12 @@ describe('gatherActionsConfig', () => {
       mockCore({ provider: 'google-vertex', model: 'gemini-2.5-pro', token: '' });
       const config = gatherActionsConfig();
       expect(config.token).toBe('');
+      expect(coreMock.setSecret).not.toHaveBeenCalled();
+    });
+
+    test('registers a non-empty provider token as a secret without a custom header', () => {
+      gatherActionsConfig();
+      expect(coreMock.setSecret).toHaveBeenCalledWith('test-token');
     });
   });
 
@@ -278,6 +284,13 @@ describe('gatherActionsConfig', () => {
         '`api_key_header` must be a valid HTTP token header name'
       );
     });
+
+    test('rejects the provider-owned Authorization header name case-insensitively', () => {
+      mockCore({ api_key_header: 'aUtHoRiZaTiOn' });
+      expect(() => gatherActionsConfig()).toThrow(
+        '`api_key_header` cannot be `Authorization` because it collides with provider authentication'
+      );
+    });
   });
 
   describe('session sharing inputs', () => {
@@ -317,7 +330,7 @@ describe('gatherActionsConfig', () => {
     test('does not call setSecret when github_token is empty', () => {
       mockCore({ github_token: '' });
       gatherActionsConfig();
-      expect(coreMock.setSecret).not.toHaveBeenCalled();
+      expect(coreMock.setSecret).not.toHaveBeenCalledWith('');
     });
 
     test('share_gist_provider defaults to undefined (github)', () => {

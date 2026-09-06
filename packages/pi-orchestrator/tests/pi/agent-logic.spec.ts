@@ -169,6 +169,14 @@ describe('Agent', () => {
   });
 
   describe('ready', () => {
+    const restore: (() => void)[] = [];
+
+    afterEach(() => {
+      while (restore.length) {
+        restore.pop()!();
+      }
+    });
+
     test('throws error for non-existent model after extensions load', async () => {
       // Model resolution is deferred to ready() so that extension-provided
       // providers are available. A model that doesn't exist even after
@@ -199,6 +207,46 @@ describe('Agent', () => {
       expect(agent).toBeDefined();
     });
 
+    test.each(['Authorization', 'authorization', 'AUTHORIZATION'])(
+      'rejects provider-owned custom header %s at the public ready boundary',
+      async apiKeyHeader => {
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          apiKeyHeader,
+        });
+
+        await expect(agent.ready()).rejects.toThrow(
+          '`api_key_header` cannot be `Authorization` because it collides with provider authentication'
+        );
+      }
+    );
+
+    test.each(['X API Key', 'X\r\nInjected', ':authority'])(
+      'rejects malformed custom header %s at the public ready boundary',
+      async apiKeyHeader => {
+        const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+          ...defaultAgentConfig,
+          apiKeyHeader,
+        });
+
+        await expect(agent.ready()).rejects.toThrow(
+          '`api_key_header` must be a valid HTTP token header name'
+        );
+      }
+    );
+
+    test('rejects a custom header without a token at the public ready boundary', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        token: '',
+        apiKeyHeader: 'LUNAROUTE-API-KEY',
+      });
+
+      await expect(agent.ready()).rejects.toThrow(
+        '`api_key_header` requires a non-empty `token` input'
+      );
+    });
+
     test('adds the token as a custom model header and preserves inherited headers', async () => {
       const token = '${LUNAROUTE_API_KEY}';
       const originalGetModel = ModelRuntime.prototype.getModel;
@@ -218,6 +266,7 @@ describe('Agent', () => {
             }
           : undefined;
       });
+      restore.push(() => getModelSpy.mockRestore());
       const debugMessages: string[] = [];
       const core = {
         ...mockCoreAdapter,

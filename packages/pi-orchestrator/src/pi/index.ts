@@ -3,4 +3,4 @@
  */
 
 // Main agent
-export { Agent, wrapAgent } from './agent';
+export { Agent, validateApiKeyHeader, wrapAgent } from './agent';

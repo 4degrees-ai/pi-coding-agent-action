@@ -11,7 +11,7 @@ export { ActionOrchestrator, buildSessionSuccessBody, buildSessionErrorBody } fr
 export { formatCost } from './format';
 
 // Agent
-export { Agent, wrapAgent } from './pi';
+export { Agent, validateApiKeyHeader, wrapAgent } from './pi';
 export { createToolsFactory } from './pi/tools';
 export { createCancellationResult, withCancellation, buildParams } from './pi/tools/tool-execution';
 export type { CancellationResult, ToolExecutionConfig } from './pi/tools/tool-execution';

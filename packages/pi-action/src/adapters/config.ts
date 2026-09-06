@@ -18,8 +18,13 @@
  */
 
 import * as core from '@actions/core';
-import { validateWorkspaceReadOnlyPolicy } from '@alexanderfortin/pi-orchestrator';
+import {
+  validateApiKeyHeader,
+  validateWorkspaceReadOnlyPolicy,
+} from '@alexanderfortin/pi-orchestrator';
 import type { PiConfig } from '@alexanderfortin/pi-orchestrator';
+
+export { validateApiKeyHeader } from '@alexanderfortin/pi-orchestrator';
 
 // ---------------------------------------------------------------------------
 // Error message constants — keep stable; they are part of the public
@@ -39,7 +44,6 @@ export const MISSING_MODEL_MESSAGE =
 
 const WORKSPACE_READ_ONLY_MODE = 'workspace-read-only';
 const MAX_REVIEW_BUDGET_SECONDS = 2_147_483;
-const HTTP_TOKEN_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers (pure functions)
@@ -150,26 +154,6 @@ export function validateRequiredInputs(provider: string, model: string): void {
   }
 }
 
-/**
- * Validate the optional header used to carry the provider token.
- *
- * Header names use the RFC 9110 `token` grammar. Keeping this validation at
- * the action boundary prevents CRLF/header injection before the name reaches
- * the SDK's request headers. The token remains an opaque value and is never
- * interpolated into provider configuration.
- */
-export function validateApiKeyHeader(apiKeyHeader: string, token: string): void {
-  if (!apiKeyHeader) {
-    return;
-  }
-  if (!HTTP_TOKEN_HEADER_NAME.test(apiKeyHeader)) {
-    throw new Error('`api_key_header` must be a valid HTTP token header name.');
-  }
-  if (!token) {
-    throw new Error('`api_key_header` requires a non-empty `token` input.');
-  }
-}
-
 function validateReviewBudgets(
   convergeAfterSeconds: number | undefined,
   finalizeAfterSeconds: number | undefined
@@ -249,9 +233,9 @@ export function gatherActionsConfig(): PiConfig {
   const isolationMode = core.getInput('isolation_mode').trim();
 
   validateApiKeyHeader(apiKeyHeader, token);
-  if (apiKeyHeader) {
-    // The token is copied into an in-memory model header later. Register it
-    // with Actions masking so accidental diagnostics cannot expose it.
+  if (token) {
+    // Register every provider token for Actions log masking, including when
+    // the provider uses its normal authentication header.
     core.setSecret(token);
   }
 
