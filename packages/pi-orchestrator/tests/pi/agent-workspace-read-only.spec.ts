@@ -148,6 +148,21 @@ describe('workspace-read-only Agent startup', () => {
     agent.dispose();
   });
 
+  test('keeps the read-only tool boundary with a custom model auth header', async () => {
+    const agent = new Agent(core as any, createMockProvider(), {
+      ...hardenedConfig(),
+      token: 'token-without-bearer',
+      apiKeyHeader: 'LUNAROUTE-API-KEY',
+    });
+    await agent.ready();
+
+    const session = sessionOf(agent);
+    expect(session.resourceLoader).toBeInstanceOf(WorkspaceReadOnlyResourceLoader);
+    expect(session.getActiveToolNames().sort()).toEqual(TOOL_NAMES);
+
+    agent.dispose();
+  });
+
   test('does not construct or reload the SDK DefaultResourceLoader', async () => {
     const reload = vi
       .spyOn(DefaultResourceLoader.prototype, 'reload')

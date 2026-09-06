@@ -39,6 +39,7 @@ export const MISSING_MODEL_MESSAGE =
 
 const WORKSPACE_READ_ONLY_MODE = 'workspace-read-only';
 const MAX_REVIEW_BUDGET_SECONDS = 2_147_483;
+const HTTP_TOKEN_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
 
 // ---------------------------------------------------------------------------
 // Parsing helpers (pure functions)
@@ -149,6 +150,26 @@ export function validateRequiredInputs(provider: string, model: string): void {
   }
 }
 
+/**
+ * Validate the optional header used to carry the provider token.
+ *
+ * Header names use the RFC 9110 `token` grammar. Keeping this validation at
+ * the action boundary prevents CRLF/header injection before the name reaches
+ * the SDK's request headers. The token remains an opaque value and is never
+ * interpolated into provider configuration.
+ */
+export function validateApiKeyHeader(apiKeyHeader: string, token: string): void {
+  if (!apiKeyHeader) {
+    return;
+  }
+  if (!HTTP_TOKEN_HEADER_NAME.test(apiKeyHeader)) {
+    throw new Error('`api_key_header` must be a valid HTTP token header name.');
+  }
+  if (!token) {
+    throw new Error('`api_key_header` requires a non-empty `token` input.');
+  }
+}
+
 function validateReviewBudgets(
   convergeAfterSeconds: number | undefined,
   finalizeAfterSeconds: number | undefined
@@ -224,7 +245,15 @@ export function gatherActionsConfig(): PiConfig {
   const promptInput = core.getInput('prompt');
   const thinkingLevel = core.getInput('thinking_level') ?? 'off';
   const baseUrl = core.getInput('base_url') || undefined;
+  const apiKeyHeader = core.getInput('api_key_header').trim();
   const isolationMode = core.getInput('isolation_mode').trim();
+
+  validateApiKeyHeader(apiKeyHeader, token);
+  if (apiKeyHeader) {
+    // The token is copied into an in-memory model header later. Register it
+    // with Actions masking so accidental diagnostics cannot expose it.
+    core.setSecret(token);
+  }
 
   // --- Optional list inputs ----------------------------------------------
   const extensions = parseStringListInput(core.getInput('extensions'), '\n');
@@ -306,6 +335,7 @@ export function gatherActionsConfig(): PiConfig {
     loadBuiltinExtensions,
     ...(loadedTools ? { loadedTools } : {}),
     ...(baseUrl ? { baseUrl } : {}),
+    ...(apiKeyHeader ? { apiKeyHeader } : {}),
     exportSessionHtml,
     exportSessionJsonl,
     autoCompaction,

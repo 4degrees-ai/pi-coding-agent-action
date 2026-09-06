@@ -21,6 +21,11 @@ inputs:
     description: 'API token for the LLM provider. Required for most providers, but can be omitted when using providers that support alternative auth mechanisms (e.g. google-vertex with Application Default Credentials).'
     required: false
 
+  api_key_header:
+    description: 'Optional HTTP header name for sending the token to a gateway (for example, LUNAROUTE-API-KEY). When set, token is required and is sent verbatim in this header in addition to the provider''s normal auth.'
+    required: false
+    default: ''
+
   thinking_level:
     description: 'Thinking level (e.g. off, low, medium, high, etc.)'
     required: false

@@ -198,6 +198,67 @@ describe('Agent', () => {
       // Can't directly verify subscribe was called, but ready() succeeds
       expect(agent).toBeDefined();
     });
+
+    test('adds the token as a custom model header and preserves inherited headers', async () => {
+      const token = '${LUNAROUTE_API_KEY}';
+      const originalGetModel = ModelRuntime.prototype.getModel;
+      const getModelSpy = vi.spyOn(ModelRuntime.prototype, 'getModel').mockImplementation(function (
+        this: ModelRuntime,
+        provider: string,
+        modelId: string
+      ) {
+        const model = originalGetModel.call(this, provider, modelId);
+        return model
+          ? {
+              ...model,
+              headers: {
+                ...(model.headers ?? {}),
+                'X-Inherited-Header': 'preserve-me',
+              },
+            }
+          : undefined;
+      });
+      const debugMessages: string[] = [];
+      const core = {
+        ...mockCoreAdapter,
+        debug: vi.fn((message: string) => debugMessages.push(message)),
+      };
+      const agent = new Agent(core as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+        token,
+        apiKeyHeader: 'LUNAROUTE-API-KEY',
+      });
+
+      await agent.ready();
+
+      const model = (agent as any).model;
+      expect(model.headers).toEqual({
+        'X-Inherited-Header': 'preserve-me',
+        'LUNAROUTE-API-KEY': token,
+      });
+      expect((agent as any).session.model.headers).toEqual(model.headers);
+      const auth = await (agent as any).modelRuntime.getAuth(model);
+      expect(auth?.auth.headers).toMatchObject({
+        'X-Inherited-Header': 'preserve-me',
+        'LUNAROUTE-API-KEY': token,
+      });
+      expect(auth?.auth.apiKey).toBe(token);
+      expect(debugMessages.join('\n')).not.toContain(token);
+      expect(getModelSpy).toHaveBeenCalled();
+
+      agent.dispose();
+    });
+
+    test('leaves model headers unchanged when no custom header is configured', async () => {
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        ...defaultAgentConfig,
+      });
+
+      await agent.ready();
+
+      expect((agent as any).model.headers?.['LUNAROUTE-API-KEY']).toBeUndefined();
+      agent.dispose();
+    });
   });
 
   describe('CredentialSynchronizationError recovery', () => {

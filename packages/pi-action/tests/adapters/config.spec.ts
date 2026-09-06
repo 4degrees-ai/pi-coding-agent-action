@@ -250,6 +250,36 @@ describe('gatherActionsConfig', () => {
     });
   });
 
+  describe('custom API key header', () => {
+    test('omits apiKeyHeader when the input is empty', () => {
+      mockCore({ api_key_header: '' });
+      expect(gatherActionsConfig().apiKeyHeader).toBeUndefined();
+    });
+
+    test('preserves the configured header name and masks its token', () => {
+      mockCore({ api_key_header: 'LUNAROUTE-API-KEY', token: 'token-without-bearer' });
+      const config = gatherActionsConfig();
+
+      expect(config.apiKeyHeader).toBe('LUNAROUTE-API-KEY');
+      expect(config.token).toBe('token-without-bearer');
+      expect(coreMock.setSecret).toHaveBeenCalledWith('token-without-bearer');
+    });
+
+    test('rejects a custom header without a token', () => {
+      mockCore({ api_key_header: 'LUNAROUTE-API-KEY', token: '' });
+      expect(() => gatherActionsConfig()).toThrow(
+        '`api_key_header` requires a non-empty `token` input'
+      );
+    });
+
+    test('rejects an invalid HTTP token header name', () => {
+      mockCore({ api_key_header: 'X API Key' });
+      expect(() => gatherActionsConfig()).toThrow(
+        '`api_key_header` must be a valid HTTP token header name'
+      );
+    });
+  });
+
   describe('session sharing inputs', () => {
     test('share_session defaults to false', () => {
       expect(gatherActionsConfig().shareSession).toBe(false);

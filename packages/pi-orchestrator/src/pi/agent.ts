@@ -260,7 +260,23 @@ export class Agent {
     // pi.registerProvider() will have populated the model registry by now.
     const foundModel = this.modelRuntime.getModel(this.config.provider, this.config.model);
     if (foundModel) {
-      this.model = foundModel;
+      if (this.config.apiKeyHeader) {
+        if (!this.config.token) {
+          throw new Error('`apiKeyHeader` requires a non-empty `token` input.');
+        }
+        // Model.headers is part of the SDK request contract. Clone the
+        // resolved model so the catalog remains unchanged, and merge into any
+        // inherited headers before the model is handed to the session.
+        this.model = {
+          ...foundModel,
+          headers: {
+            ...(foundModel.headers ?? {}),
+            [this.config.apiKeyHeader]: this.config.token,
+          },
+        };
+      } else {
+        this.model = foundModel;
+      }
     } else {
       throw new Error(
         `Model not found: ${this.config.provider}/${this.config.model}. ` +

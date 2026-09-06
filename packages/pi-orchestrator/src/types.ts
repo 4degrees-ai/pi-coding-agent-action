@@ -240,6 +240,11 @@ export interface PiConfig extends DiffConfig {
   /** Seconds before disabling tools and steering a running review to synthesize its result. */
   finalizeAfterSeconds?: number;
   baseUrl?: string;
+  /**
+   * Optional HTTP header name that receives the existing provider token.
+   * Empty/undefined keeps the provider's normal bearer/API-key auth path.
+   */
+  apiKeyHeader?: string;
   exportSessionHtml?: boolean;
   exportSessionJsonl?: boolean;
   autoCompaction?: boolean;
