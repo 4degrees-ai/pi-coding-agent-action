@@ -25,6 +25,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { buildResourceLoaderOptions } from './resource-loader';
 import { getSystemPrompt } from './prompt';
+import { resolveModel } from './model-resolution';
 import {
   createWorkspaceBoundaryTracker,
   createWorkspaceReadOnlyResourceLoader,
@@ -286,7 +287,7 @@ export class Agent {
 
     // Resolve the model AFTER extensions have loaded — extensions that call
     // pi.registerProvider() will have populated the model registry by now.
-    const foundModel = this.modelRuntime.getModel(this.config.provider, this.config.model);
+    const foundModel = resolveModel(this.modelRuntime, this.config.provider, this.config.model);
     if (foundModel) {
       if (this.config.apiKeyHeader) {
         // Model.headers is part of the SDK request contract. Clone the
