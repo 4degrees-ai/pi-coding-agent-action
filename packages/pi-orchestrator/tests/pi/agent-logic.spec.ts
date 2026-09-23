@@ -192,6 +192,95 @@ describe('Agent', () => {
       await expect(agent.ready()).rejects.toThrow('Model not found');
     });
 
+    test('uses GPT-6 Luna through the configured OpenAI Responses endpoint with max effort and tools', async () => {
+      const baseUrl = 'https://openrouter.ai/api/v1';
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        model: 'openai/gpt-6-luna',
+        provider: 'openai',
+        baseUrl,
+        token: 'test-token',
+        thinkingLevel: 'max',
+        promptInput: '',
+      });
+      let requestUrl: string | undefined;
+      let requestBody: Record<string, any> | undefined;
+      const completedEvent = {
+        type: 'response.completed',
+        response: {
+          id: 'resp_test',
+          object: 'response',
+          created_at: 1,
+          model: 'openai/gpt-6-luna',
+          output: [],
+          status: 'completed',
+          usage: {
+            input_tokens: 4,
+            output_tokens: 1,
+            total_tokens: 5,
+            input_tokens_details: { cached_tokens: 0 },
+            output_tokens_details: { reasoning_tokens: 1 },
+          },
+        },
+      };
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string | URL, init?: RequestInit) => {
+          requestUrl = String(input);
+          requestBody = JSON.parse(String(init?.body)) as Record<string, any>;
+          return new Response(
+            `event: response.completed\ndata: ${JSON.stringify(completedEvent)}\n\n`,
+            {
+              status: 200,
+              headers: { 'content-type': 'text/event-stream' },
+            }
+          );
+        })
+      );
+      restore.push(() => vi.unstubAllGlobals());
+
+      try {
+        await agent.ready();
+        const runtime = (agent as any).modelRuntime as ModelRuntime;
+        const model = (agent as any).model;
+        const stream = runtime.streamSimple(
+          model,
+          {
+            systemPrompt: 'Use available tools when appropriate.',
+            messages: [userHelloMessage],
+            tools: [
+              {
+                name: 'lookup_item',
+                description: 'Look up an item by name.',
+                parameters: {
+                  type: 'object',
+                  properties: { name: { type: 'string' } },
+                  required: ['name'],
+                  additionalProperties: false,
+                },
+              },
+            ],
+          } as any,
+          { reasoning: 'max' }
+        );
+
+        const result = await stream.result();
+
+        expect(result.stopReason).toBe('stop');
+        expect(requestUrl).toBe(`${baseUrl}/responses`);
+        expect(requestBody).toMatchObject({
+          model: 'openai/gpt-6-luna',
+          reasoning: { effort: 'max' },
+          tools: [expect.objectContaining({ type: 'function', name: 'lookup_item' })],
+        });
+        expect(model.api).toBe('openai-responses');
+        expect(model.baseUrl).toBe(baseUrl);
+        expect((agent as any).session.model.id).toBe('openai/gpt-6-luna');
+      } finally {
+        agent.dispose();
+      }
+    });
+
     test('initializes session and returns self', async () => {
       const agent = createRealAgent();
       const result = await agent.ready();
