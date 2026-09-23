@@ -25,6 +25,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { buildResourceLoaderOptions } from './resource-loader';
 import { getSystemPrompt } from './prompt';
+import { formatModelLabel } from './logging';
 import { resolveModel } from './model-resolution';
 import {
   createWorkspaceBoundaryTracker,
@@ -323,7 +324,7 @@ export class Agent {
       const supported = getSupportedThinkingLevels(this.model);
       this.logger.warning(
         `[thinking] Requested level "${requestedThinkingLevel}" is not supported by ` +
-          `${this.model.provider}/${this.model.id}; clamping to "${effectiveThinkingLevel}" ` +
+          `${formatModelLabel(this.model)}; clamping to "${effectiveThinkingLevel}" ` +
           `(supported: ${supported.join(', ')})`
       );
       this.thinkingLevel = effectiveThinkingLevel;

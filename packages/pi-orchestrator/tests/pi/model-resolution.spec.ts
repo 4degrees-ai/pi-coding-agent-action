@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
+import { clampThinkingLevel, getSupportedThinkingLevels } from '@earendil-works/pi-ai';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { resolveModel } from '../../src/pi/model-resolution';
 
@@ -96,6 +97,15 @@ describe('resolveModel', () => {
       });
     }
   );
+
+  test('marks minimal unsupported and clamps it when the compatibility model has no level map', () => {
+    const { runtime } = makeRuntime(makeModel('gpt-5.6-luna'));
+    const model = resolveModel(runtime, 'openai', 'gpt-6-luna');
+
+    expect(model?.thinkingLevelMap?.minimal).toBeNull();
+    expect(getSupportedThinkingLevels(model!)).not.toContain('minimal');
+    expect(clampThinkingLevel(model!, 'minimal')).toBe('low');
+  });
 
   test('keeps unrelated and unsupported provider/model lookups unresolved', () => {
     const { runtime } = makeRuntime(makeModel('gpt-5.6-luna'));

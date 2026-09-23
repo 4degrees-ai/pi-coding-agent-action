@@ -41,6 +41,11 @@ function warning(text: string): LogLine {
   return { level: 'warning', text };
 }
 
+export function formatModelLabel(model: { provider: string; id: string }): string {
+  const providerPrefix = `${model.provider}/`;
+  return model.id.startsWith(providerPrefix) ? model.id : `${providerPrefix}${model.id}`;
+}
+
 /**
  * Format the LLM/model block of the session banner. Exported for unit testing.
  */
@@ -53,7 +58,7 @@ export function formatLLMSection(
 ): LogLine[] {
   const lines: LogLine[] = [info('📊 LLM')];
   if (model) {
-    lines.push(info(`  Model:            ${model.provider}/${model.id}`));
+    lines.push(info(`  Model:            ${formatModelLabel(model)}`));
     lines.push(info(`  Reasoning:        ${model.reasoning}`));
   } else {
     lines.push(info('  Model:     Not configured'));

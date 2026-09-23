@@ -74,6 +74,23 @@ describe('formatLLMSection', () => {
     expect(allInfo(lines)).toContain('  Reasoning:        null');
   });
 
+  test.each([
+    { provider: 'openai', id: 'openai/gpt-6-luna', label: 'openai/gpt-6-luna' },
+    {
+      provider: 'openrouter',
+      id: 'openai/gpt-6-luna',
+      label: 'openrouter/openai/gpt-6-luna',
+    },
+    {
+      provider: 'openai-codex',
+      id: 'openai/gpt-6-luna',
+      label: 'openai-codex/openai/gpt-6-luna',
+    },
+  ])('formats $provider/$id without collapsing different namespaces', ({ provider, id, label }) => {
+    const lines = formatLLMSection({ provider, id }, 'max');
+    expect(allInfo(lines)).toContain(`  Model:            ${label}`);
+  });
+
   test('always ends with the section separator', () => {
     const lines = formatLLMSection(null, '');
     expect(lines[lines.length - 1]).toEqual({
