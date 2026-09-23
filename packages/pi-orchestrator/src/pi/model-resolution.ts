@@ -34,7 +34,7 @@ export function resolveModel(
     id: modelId,
     name: 'GPT-6 Luna',
     reasoning: true,
-    thinkingLevelMap: { ...baseModel.thinkingLevelMap, max: 'max' },
+    thinkingLevelMap: { ...baseModel.thinkingLevelMap, minimal: null, max: 'max' },
     cost: {
       input: 0.1,
       output: 0.5,
