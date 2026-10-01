@@ -115,3 +115,75 @@ describe('resolveModel', () => {
     expect(resolveModel(makeRuntime().runtime, 'openai', 'gpt-6-luna')).toBeUndefined();
   });
 });
+
+describe('resolveModel for LunaRoute DeepSeek 4.1 Flash', () => {
+  function makeDeepSeekV4Flash(overrides: Partial<Model<Api>> = {}): Model<Api> {
+    return makeModel('deepseek-v4-flash', {
+      name: 'DeepSeek V4 Flash',
+      api: 'openai-completions',
+      provider: 'deepseek',
+      baseUrl: 'https://lunaroute.example/v1',
+      input: ['text'],
+      cost: { input: 0.14, output: 0.28, cacheRead: 0.0028, cacheWrite: 0 },
+      contextWindow: 1_000_000,
+      maxTokens: 384_000,
+      compat: {
+        maxTokensField: 'max_tokens',
+        requiresReasoningContentOnAssistantMessages: true,
+        thinkingFormat: 'deepseek',
+      },
+      thinkingLevelMap: { minimal: null, low: 'low', medium: null, high: 'high', max: 'max' },
+      ...overrides,
+    });
+  }
+
+  test('returns an exact catalog match unchanged', () => {
+    const exact = makeDeepSeekV4Flash({ id: 'deepseek-4.1-flash', maxTokens: 1 });
+    const { runtime } = makeRuntime(exact, makeDeepSeekV4Flash());
+
+    expect(resolveModel(runtime, 'deepseek', 'deepseek-4.1-flash')).toBe(exact);
+  });
+
+  test('uses LunaRoute metadata on V4 Flash DeepSeek wiring when the catalog is behind', () => {
+    const base = makeDeepSeekV4Flash();
+    const { runtime } = makeRuntime(base);
+
+    const model = resolveModel(runtime, 'deepseek', 'deepseek-4.1-flash');
+
+    expect(model).toEqual({
+      ...base,
+      id: 'deepseek-4.1-flash',
+      name: 'DeepSeek 4.1 Flash',
+      input: ['text', 'image'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 1_050_000,
+      maxTokens: 262_144,
+    });
+    expect(model).toMatchObject({
+      api: 'openai-completions',
+      provider: 'deepseek',
+      baseUrl: 'https://lunaroute.example/v1',
+      compat: { thinkingFormat: 'deepseek', requiresReasoningContentOnAssistantMessages: true },
+      thinkingLevelMap: base.thinkingLevelMap,
+    });
+    expect(base).toMatchObject({ id: 'deepseek-v4-flash', maxTokens: 384_000 });
+  });
+
+  test('keeps the SDK DeepSeek level map, so medium clamps to a supported level', () => {
+    const { runtime } = makeRuntime(makeDeepSeekV4Flash());
+    const model = resolveModel(runtime, 'deepseek', 'deepseek-4.1-flash');
+
+    expect(getSupportedThinkingLevels(model!)).not.toContain('medium');
+    expect(clampThinkingLevel(model!, 'medium')).not.toBe('medium');
+  });
+
+  test('keeps unrelated and unsupported provider/model lookups unresolved', () => {
+    const { runtime } = makeRuntime(makeDeepSeekV4Flash());
+
+    expect(resolveModel(runtime, 'openai', 'deepseek-4.1-flash')).toBeUndefined();
+    expect(resolveModel(runtime, 'openrouter', 'deepseek-4.1-flash')).toBeUndefined();
+    expect(resolveModel(runtime, 'deepseek', 'deepseek-v4.1-flash')).toBeUndefined();
+    expect(resolveModel(runtime, 'deepseek', 'deepseek-4.1-pro')).toBeUndefined();
+    expect(resolveModel(makeRuntime().runtime, 'deepseek', 'deepseek-4.1-flash')).toBeUndefined();
+  });
+});

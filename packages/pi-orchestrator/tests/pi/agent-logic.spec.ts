@@ -301,6 +301,92 @@ describe('Agent', () => {
       }
     );
 
+    test('runs LunaRoute deepseek-4.1-flash through the session with the DeepSeek request format', async () => {
+      const baseUrl = 'https://lunaroute.example/v1';
+      const model = 'deepseek-4.1-flash';
+      const agent = new Agent(mockCoreAdapter as any, mockPlatformProvider, {
+        model,
+        provider: 'deepseek',
+        baseUrl,
+        token: 'test-token',
+        thinkingLevel: 'high',
+        promptInput: '',
+        loadedTools: ['read'],
+      });
+      const expectedRequestUrl = `${baseUrl}/chat/completions`;
+      let requestUrl: string | undefined;
+      let requestBody: Record<string, any> | undefined;
+      const chunk = (delta: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({
+        id: 'chatcmpl_test',
+        object: 'chat.completion.chunk',
+        created: 1,
+        model,
+        choices: [{ index: 0, delta, finish_reason: null }],
+        ...extra,
+      });
+      const chunks = [
+        chunk({ role: 'assistant', reasoning_content: 'Checking the diff.' }),
+        chunk({ content: 'DeepSeek review complete' }),
+        {
+          ...chunk({}),
+          choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 },
+        },
+      ];
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+          requestUrl = input instanceof Request ? input.url : String(input);
+          requestBody = JSON.parse(String(init?.body)) as Record<string, any>;
+          const body =
+            chunks.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n';
+          return new Response(body, {
+            status: 200,
+            headers: { 'content-type': 'text/event-stream' },
+          });
+        })
+      );
+      restore.push(() => vi.unstubAllGlobals());
+
+      try {
+        await agent.ready();
+        expect((agent as any).session.getActiveToolNames()).toEqual(['read']);
+        expect((agent as any).model).toMatchObject({
+          id: model,
+          provider: 'deepseek',
+          api: 'openai-completions',
+          baseUrl,
+          contextWindow: 1_050_000,
+          maxTokens: 262_144,
+          compat: { thinkingFormat: 'deepseek' },
+        });
+
+        const result = await agent.run('Review this change');
+
+        expect(result).toMatchObject({
+          result: 'DeepSeek review complete',
+          error: undefined,
+        });
+        expect(requestUrl).toBe(expectedRequestUrl);
+        expect(requestBody).toMatchObject({
+          model,
+          thinking: { type: 'enabled' },
+          reasoning_effort: 'high',
+          max_tokens: expect.any(Number),
+          tools: [
+            expect.objectContaining({
+              type: 'function',
+              function: expect.objectContaining({ name: 'read' }),
+            }),
+          ],
+        });
+        expect(requestBody).not.toHaveProperty('max_completion_tokens');
+      } finally {
+        agent.dispose();
+      }
+    });
+
     test('initializes session and returns self', async () => {
       const agent = createRealAgent();
       const result = await agent.ready();
